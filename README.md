@@ -24,8 +24,16 @@
 
 - [Overview](#-overview)
 - [Problem Statement](#-problem-statement)
-- [Solution](#-solution)
+- [Solution — How AutoSocial AI Reduces Your Costs](#-solution--how-autosocial-ai-reduces-your-costs)
 - [Key Features](#-key-features)
+- [Dashboard Pages — Complete Guide](#-dashboard-pages--complete-guide)
+- [Settings & Social Media Connection](#-settings--social-media-connection)
+- [How AI Video Editing Works — In Depth](#-how-ai-video-editing-works--in-depth)
+- [How AI Subtitle Generation Works — Whisper AI](#-how-ai-subtitle-generation-works--whisper-ai)
+- [How AI Caption Generation Works](#-how-ai-caption-generation-works)
+- [How AI Hashtag Generation Works](#-how-ai-hashtag-generation-works)
+- [How Thumbnail Generation Works](#-how-thumbnail-generation-works)
+- [Multi-Platform Publishing — Detailed](#-multi-platform-publishing--detailed)
 - [User Workflow](#-user-workflow)
 - [Tech Stack](#-tech-stack)
 - [Folder Structure](#-folder-structure)
@@ -34,13 +42,17 @@
 - [Security](#-security)
 - [Scalability](#-scalability)
 - [Business Model](#-business-model)
+- [Cost Comparison — Why AutoSocial AI](#-cost-comparison--why-autosocial-ai)
 - [Installation](#-installation)
 - [Environment Variables](#-environment-variables)
 - [Docker Setup](#-docker-setup)
 - [API Overview](#-api-overview)
+- [AI Assistant — Future Feature](#-ai-assistant--future-feature)
 - [Roadmap](#-roadmap)
+- [FAQ](#-faq)
 - [Contributing](#-contributing)
 - [License](#-license)
+- [Contact](#-contact)
 
 ---
 
@@ -83,9 +95,26 @@ Local business owners face a critical social media challenge:
 
 ---
 
-## ✅ Solution
+## ✅ Solution — How AutoSocial AI Reduces Your Costs
 
 AutoSocial AI acts as your **AI Social Media Employee** — working 24/7, never missing a posting schedule, at a fraction of the cost.
+
+### 💸 The #1 Priority: Reducing Your Overhead
+
+The entire platform is designed around one principle: **eliminate the $2,000–$5,000/month cost of hiring human video editors and social media managers.**
+
+| Task | Human Cost | AutoSocial AI | You Save |
+|---|---|---|---|
+| Video Editing (30 videos/month) | $1,200/month | ✅ Automatic | $1,200 |
+| Subtitle Creation | $200/month | ✅ Automatic (Whisper AI) | $200 |
+| Caption Writing | $300/month | ✅ Automatic (GPT-4o) | $300 |
+| Hashtag Research | $100/month | ✅ Automatic | $100 |
+| Thumbnail Design | $150/month | ✅ Automatic | $150 |
+| Scheduling & Publishing | $500/month | ✅ Automatic | $500 |
+| Analytics Reporting | $300/month | ✅ Automatic | $300 |
+| **Total** | **$2,750/month** | **$29–$79/month** | **$2,671+/month** |
+
+> **97% cost reduction** — that's over **$32,000 saved per year** for a single business.
 
 ```
 ✅ Upload a raw video → AI does everything else
@@ -93,6 +122,7 @@ AutoSocial AI acts as your **AI Social Media Employee** — working 24/7, never 
 ✅ Post to Instagram, TikTok, YouTube Shorts, Facebook, LinkedIn
 ✅ Cost: $29–$199/month vs $2,000–$5,000/month for human staff
 ✅ Time saved: 15–20 hours/week per business
+✅ No technical skills required — just record and upload
 ```
 
 ---
@@ -133,6 +163,280 @@ AutoSocial AI acts as your **AI Social Media Employee** — working 24/7, never 
 - Email + Push notifications
 
 ---
+
+## 📱 Dashboard Pages — Complete Guide
+
+The dashboard opens directly when a user accesses the platform — **no login wall, no friction**. Every page is designed for non-technical business owners.
+
+### 🏠 Home Dashboard
+The central command center showing:
+- **Quick Stats** — Total videos uploaded, processed, published this month
+- **Recent Activity** — Latest uploads with live processing status bars
+- **Publishing Calendar** — Visual calendar showing scheduled and published posts
+- **Performance Summary** — This week's total views, likes, and engagement across all platforms
+- **Quick Upload Button** — One-click access to upload a new video
+
+### 📤 Upload Page
+- **Drag & Drop Zone** — Drop video files directly into the browser
+- **Supported Formats** — MP4, MOV, AVI, MKV, WebM
+- **Maximum File Size** — 2GB per video
+- **Progress Bar** — Real-time upload percentage with estimated time remaining
+- **Upload History** — Full list of previous uploads with status indicators (Processing, Ready, Published, Failed)
+- **Batch Upload** — Upload multiple videos at once (Professional plan and above)
+
+### 🎬 Videos Page
+- **Video Library** — Grid/list view of all uploaded and processed videos
+- **Status Filters** — Filter by: All, Processing, Ready for Review, Published, Scheduled
+- **Video Preview** — Click any video to see original vs. processed comparison
+- **Quick Actions** — Publish, Schedule, Re-process, Download, Delete
+- **Search & Sort** — Find videos by title, date, status, or platform
+
+### 📅 Schedule Page
+- **Calendar View** — Monthly/weekly calendar with drag-to-schedule functionality
+- **Queue Management** — Ordered list of upcoming scheduled posts
+- **Optimal Time Suggestions** — AI recommends best posting times per platform based on audience data
+- **Bulk Scheduling** — Schedule multiple videos across multiple platforms in one action
+
+### 📊 Analytics Page
+- **Overview Dashboard** — Aggregated metrics across all platforms
+- **Per-Post Analytics** — Detailed views, likes, comments, shares, reach for each post
+- **Platform Comparison** — See which platform performs best for your content
+- **Follower Growth Chart** — Track follower increases over time
+- **Engagement Rate Trends** — Weekly/monthly engagement trend lines
+- **Best Performing Content** — Top 10 posts ranked by engagement
+- **Posting History** — Full history of when and where content was published
+
+### ⚙️ Settings Page
+Detailed in the next section — this is where users connect social media accounts, configure branding, and manage preferences.
+
+---
+
+## 🔗 Settings & Social Media Connection
+
+The **Settings page** is where business owners configure their accounts and — most importantly — **connect their social media platforms** for automated publishing.
+
+### How Social Media Connection Works
+
+Connecting social accounts is designed to be as simple as possible:
+
+```mermaid
+flowchart TD
+    A[⚙️ Open Settings Page] --> B[📱 Social Accounts Tab]
+    B --> C[Click 'Connect' Button]
+    C --> D{Choose Platform}
+    D --> E[📸 Instagram]
+    D --> F[📘 Facebook]
+    D --> G[🎵 TikTok]
+    D --> H[▶️ YouTube]
+    D --> I[💼 LinkedIn]
+    E & F & G & H & I --> J[🔐 OAuth 2.0 Login Popup]
+    J --> K[User Grants Permissions]
+    K --> L[✅ Account Connected]
+    L --> M[🟢 Status: Active]
+    M --> N[Ready to Publish!]
+```
+
+### Step-by-Step Connection Process
+
+1. **Navigate to Settings** → Click the ⚙️ gear icon in the sidebar
+2. **Open Social Accounts Tab** → See all available platforms with Connect/Disconnect buttons
+3. **Click "Connect"** next to your desired platform (e.g., Instagram)
+4. **OAuth Popup Opens** → You log into your social media account in a secure popup window
+5. **Grant Permissions** → Allow AutoSocial AI to publish content on your behalf
+6. **Connection Confirmed** → A green ✅ badge appears next to the connected account
+7. **Done!** → All future videos can now be published to that platform automatically
+
+### Settings Page — All Tabs
+
+| Tab | What It Contains |
+|---|---|
+| 🏢 **Business Profile** | Business name, industry type, logo upload, brand colors |
+| 📱 **Social Accounts** | Connect/disconnect Instagram, Facebook, TikTok, YouTube, LinkedIn |
+| 🎨 **Branding** | Default logo overlay position, subtitle style, watermark settings |
+| 🔔 **Notifications** | Toggle email/push notifications for uploads, publishing, failures |
+| 📝 **Default Preferences** | Default caption tone, hashtag count, thumbnail style |
+| 💳 **Subscription** | Current plan, usage, upgrade/downgrade |
+| 🔒 **Security** | Change password, two-factor authentication, active sessions |
+
+### Connected Accounts Dashboard
+
+Once connected, each social account card shows:
+
+```
+┌─────────────────────────────────────────────┐
+│  📸 Instagram          🟢 Connected         │
+│  @yourbusiness                               │
+│  Followers: 2,450  │  Posts via AI: 23       │
+│  Last Published: 2 hours ago                 │
+│  Token Expires: 58 days                      │
+│  [📊 View Stats]  [🔄 Reconnect]  [❌ Remove]│
+└─────────────────────────────────────────────┘
+```
+
+> **Token Auto-Refresh:** AutoSocial AI automatically refreshes OAuth tokens before they expire, so your accounts stay connected without manual intervention.
+
+> **Multi-Account Support:** On the Agency plan, connect up to 50 social accounts across multiple businesses.
+
+---
+
+## 🎬 How AI Video Editing Works — In Depth
+
+AutoSocial AI uses **FFmpeg** — the industry-standard open-source media processing engine — combined with custom AI analysis to transform raw footage into platform-ready content.
+
+### What the AI Does to Your Video
+
+| Step | What Happens | Technology | Why It Matters |
+|---|---|---|---|
+| **1. Silence Detection** | Scans the audio track and identifies gaps with no speech or music | FFmpeg `silencedetect` filter | Removes boring pauses that cause viewers to scroll away |
+| **2. Silence Removal** | Cuts silent segments (configurable: >0.5s, >1s, >2s thresholds) | FFmpeg audio/video sync trim | Creates fast-paced, engaging content that holds attention |
+| **3. Auto-Trimming** | Detects dead frames at the start/end of the video | FFmpeg scene detection | Removes the "reaching for the camera" moments |
+| **4. Vertical Conversion** | Converts horizontal (16:9) video to vertical (9:16) | FFmpeg crop + scale with smart center detection | Required format for Reels, Shorts, and TikTok |
+| **5. Quality Optimization** | Re-encodes with optimal bitrate for each platform | FFmpeg H.264/H.265 encoding | Maintains visual quality while reducing file size by 40-60% |
+| **6. Compression** | Reduces file size without perceptible quality loss | FFmpeg CRF (Constant Rate Factor) tuning | Faster uploads, lower bandwidth costs |
+| **7. Logo Overlay** | Places your business logo at a configurable position | FFmpeg overlay filter | Professional branding on every video |
+| **8. Subtitle Burning** | Renders subtitles directly onto the video frames | FFmpeg ASS/SRT subtitle rendering | 85% of social media videos are watched with sound off |
+
+### Processing Performance
+
+| Video Length | Processing Time | Output Formats |
+|---|---|---|
+| 30 seconds | ~1 minute | 9:16 (Reels/Shorts/TikTok) |
+| 1 minute | ~2-3 minutes | 9:16 + 16:9 (landscape) |
+| 5 minutes | ~8-10 minutes | 9:16 + 16:9 + 1:1 (square) |
+| 15 minutes | ~15-20 minutes | All formats |
+
+---
+
+## 🎙️ How AI Subtitle Generation Works — Whisper AI
+
+**OpenAI Whisper** is a state-of-the-art automatic speech recognition (ASR) model that powers AutoSocial AI's subtitle engine.
+
+### Why Whisper AI?
+
+- **Accuracy:** 95%+ word-level accuracy across 99 languages
+- **Speed:** Processes 1 minute of audio in ~10 seconds
+- **Cost:** Open-source model — no per-minute API charges when self-hosted
+- **Timestamps:** Provides word-level timestamps for perfectly synced subtitles
+
+### Subtitle Generation Process
+
+```
+Raw Video Audio → Whisper v3 Model → Word-Level Transcription
+→ Sentence Grouping → SRT/ASS File → Style Formatting
+→ Burned onto Video OR Soft Subtitle Track
+```
+
+### Subtitle Styles Available
+
+| Style | Description | Best For |
+|---|---|---|
+| **Classic** | White text, black outline, bottom-center | Professional content |
+| **Bold Pop** | Large bold text with colored background | Attention-grabbing Reels |
+| **Karaoke** | Word-by-word highlight as spoken | Music/storytelling |
+| **Minimal** | Small, clean text at bottom | Aesthetic content |
+
+> **Multi-Language Support:** Whisper automatically detects the spoken language. Subtitles can be generated in the original language or auto-translated to 50+ languages.
+
+---
+
+## ✍️ How AI Caption Generation Works
+
+AutoSocial AI uses **OpenAI GPT-4o** to generate platform-specific, engagement-optimized captions for every video.
+
+### How It Works
+
+1. **Transcript Analysis** — GPT-4o reads the Whisper-generated transcript to understand the video content
+2. **Business Context** — The AI considers your business type (dentist, salon, gym, etc.) and brand voice
+3. **Platform Optimization** — Generates different caption styles for each platform:
+   - **Instagram** — Emotional, story-driven, with line breaks and emoji
+   - **TikTok** — Short, punchy, trend-aware with hooks
+   - **YouTube** — SEO-optimized description with timestamps and keywords
+   - **Facebook** — Conversational, community-focused
+   - **LinkedIn** — Professional, value-driven, thought-leadership style
+4. **CTA Included** — Each caption includes a relevant call-to-action ("Book Now", "Visit Us", "Follow for More")
+
+### Example Output
+
+> **Input:** A 45-second video of a dentist performing teeth whitening
+>
+> **Instagram Caption Generated:**
+> ✨ This transformation took just 45 minutes! ✨
+>
+> Watch this incredible teeth whitening journey — from stained to stunning.
+>
+> 📍 Dr. Smith's Dental Clinic
+> 📞 Book your appointment today → Link in bio
+>
+> #TeethWhitening #DentalCare #SmileMakeover #BeforeAndAfter
+
+---
+
+## #️⃣ How AI Hashtag Generation Works
+
+Hashtags are critical for discoverability. AutoSocial AI generates a smart mix of hashtags using GPT-4o analysis.
+
+### Hashtag Strategy (per post)
+
+| Category | Count | Example | Purpose |
+|---|---|---|---|
+| 🔥 **Trending** | 3-5 | #SmileMakeover #GlowUp | Ride viral waves |
+| 🎯 **Niche** | 5-8 | #DentistLife #TeethWhitening | Reach target audience |
+| 📍 **Local** | 2-3 | #NYCDentist #ManhattanSmile | Local SEO & discovery |
+| 🏷️ **Brand** | 1-2 | #DrSmithDental #AutoSocialAI | Brand recognition |
+| **Total** | **11-18** | | **Optimal range per platform** |
+
+### Platform-Specific Hashtag Counts
+
+- **Instagram:** 20-30 hashtags (in first comment for cleaner look)
+- **TikTok:** 5-8 hashtags (fewer = better on TikTok)
+- **YouTube Shorts:** 3-5 hashtags (in description + title)
+- **LinkedIn:** 3-5 hashtags (professional, industry-specific)
+- **Facebook:** 3-5 hashtags (minimal usage, focus on reach)
+
+---
+
+## 🖼️ How Thumbnail Generation Works
+
+AutoSocial AI generates eye-catching thumbnails automatically — no Photoshop or Canva needed.
+
+### Process
+
+1. **Frame Extraction** — FFmpeg analyzes the entire video and extracts the **top 5 sharpest, most visually appealing frames** using scene-change detection and blur analysis
+2. **Face Detection** — If faces are present, the AI selects frames where faces are clearly visible and well-lit
+3. **Text Overlay** — Adds engaging title text derived from the AI-generated caption
+4. **Brand Integration** — Overlays your business logo in a non-intrusive position
+5. **Format Optimization** — Generates thumbnails in platform-specific dimensions:
+
+| Platform | Dimensions | Format |
+|---|---|---|
+| YouTube Shorts | 1280 × 720 | JPG/PNG |
+| Instagram Reels | 1080 × 1920 | JPG |
+| TikTok | 1080 × 1920 | JPG |
+| Facebook | 1280 × 720 | JPG |
+| LinkedIn | 1200 × 627 | PNG |
+
+> **User Control:** Before publishing, you can choose from the 5 generated thumbnail options or upload your own custom thumbnail.
+
+---
+
+## 📲 Multi-Platform Publishing — Detailed
+
+### Supported Platforms & Capabilities
+
+| Platform | Content Type | Scheduling | Analytics | API Used |
+|---|---|---|---|---|
+| 📸 **Instagram** | Reels, Feed Posts | ✅ Yes | ✅ Views, Likes, Comments, Reach | Instagram Graph API |
+| 📘 **Facebook** | Videos, Stories, Reels | ✅ Yes | ✅ Views, Reactions, Shares | Facebook Graph API |
+| 🎵 **TikTok** | Short Videos | ✅ Yes | ✅ Views, Likes, Comments | TikTok Content Posting API |
+| ▶️ **YouTube** | Shorts, Regular Videos | ✅ Yes | ✅ Views, Likes, Subscribers | YouTube Data API v3 |
+| 💼 **LinkedIn** | Video Posts | ✅ Yes | ✅ Views, Reactions, Comments | LinkedIn Marketing API |
+
+### Publishing Options
+
+- **⚡ Instant Publish** — Publish immediately to selected platforms with one click
+- **📅 Scheduled Publish** — Pick a date, time, and timezone — the system publishes automatically
+- **🤖 AI-Optimized Timing** — Let the AI choose the best time based on your audience engagement data
+- **📢 Multi-Platform** — Publish to all 5 platforms simultaneously with platform-specific captions and hashtags
 
 ## 🔄 User Workflow
 
@@ -429,9 +733,11 @@ flowchart LR
 
 ## 🔒 Security
 
+> **Note on Access:** The platform is designed for rapid onboarding. The dashboard is accessible immediately without a login wall, ensuring business owners can explore the tool instantly. Authentication (OAuth/Email) is only required when saving sensitive settings or connecting social accounts.
+
 | Security Layer | Implementation |
 |---|---|
-| **Authentication** | Session-based auth with encrypted cookies |
+| **Authentication** | Direct dashboard access with optional secure sessions for advanced settings |
 | **Authorization** | Role-Based Access Control (RBAC) — Owner, Manager, Viewer |
 | **API Security** | Rate limiting via Redis (100 req/min per user) |
 | **Input Validation** | Zod schemas on all API routes |
@@ -475,18 +781,47 @@ flowchart LR
 
 ## 💰 Business Model
 
-| Plan | Price | Videos/Month | Platforms | Users |
-|---|---|---|---|---|
-| 🆓 **Free** | $0 | 5 | 2 | 1 |
-| 🚀 **Starter** | $29/mo | 30 | 3 | 1 |
-| 💼 **Professional** | $79/mo | 100 | 5 | 3 |
-| 🏢 **Agency** | $199/mo | 500 | 5 | 10 |
-| 🏭 **Enterprise** | Custom | Unlimited | 5+ | Unlimited |
+| Plan | Price | Videos/Month | Platforms | Users | AI Features |
+|---|---|---|---|---|---|
+| 🆓 **Free** | $0 | 5 | 2 | 1 | Basic editing, subtitles |
+| 🚀 **Starter** | $29/mo | 30 | 3 | 1 | Full AI editing, captions, hashtags |
+| 💼 **Professional** | $79/mo | 100 | 5 | 3 | + Analytics, scheduling, brand templates |
+| 🏢 **Agency** | $199/mo | 500 | 5 | 10 | + Multi-business, white-label, priority processing |
+| 🏭 **Enterprise** | Custom | Unlimited | 5+ | Unlimited | + Dedicated support, custom AI models, SLA |
 
-> **Cost Savings vs. Human Staff:**
-> - Human video editor + social media manager: **$2,000–$5,000/month**
-> - AutoSocial AI Professional: **$79/month**
-> - **Savings: 97% cost reduction**
+---
+
+## 💸 Cost Comparison — Why AutoSocial AI
+
+This is the core value proposition. Here's an honest, detailed cost breakdown:
+
+### Monthly Cost: Traditional Approach vs AutoSocial AI
+
+| Expense | Hiring Humans | AutoSocial AI (Pro Plan) |
+|---|---|---|
+| Video Editor (part-time) | $1,200–$2,000 | $0 (AI automated) |
+| Social Media Manager | $1,000–$3,000 | $0 (AI automated) |
+| Subtitle Services | $150–$300 | $0 (Whisper AI) |
+| Thumbnail Designer | $100–$200 | $0 (AI automated) |
+| Scheduling Tool (Buffer/Hootsuite) | $50–$100 | $0 (built-in) |
+| Analytics Tool | $30–$100 | $0 (built-in) |
+| **Monthly Total** | **$2,530–$5,700** | **$79** |
+| **Annual Total** | **$30,360–$68,400** | **$948** |
+| **You Save** | — | **$29,412–$67,452/year** |
+
+### Time Savings Per Week
+
+| Task | Manual Time | With AutoSocial AI |
+|---|---|---|
+| Editing 5 videos | 10 hours | 0 hours (AI) |
+| Writing 5 captions | 2 hours | 0 hours (AI) |
+| Researching hashtags | 1 hour | 0 hours (AI) |
+| Creating thumbnails | 2 hours | 0 hours (AI) |
+| Scheduling posts | 1 hour | 5 minutes |
+| Checking analytics | 1 hour | 5 minutes |
+| **Weekly Total** | **17 hours** | **10 minutes** |
+
+> **Bottom Line:** AutoSocial AI reduces social media management costs by **97%** and saves **17+ hours per week.** For a local business owner, that's the equivalent of hiring a full-time employee — for less than the price of a monthly Netflix subscription.
 
 ---
 
@@ -633,6 +968,24 @@ docker-compose -f docker-compose.prod.yml up -d
 | `GET` | `/api/analytics/:postId` | Get per-post analytics |
 | `POST` | `/api/social/connect` | Connect social account |
 | `DELETE` | `/api/social/:id` | Disconnect social account |
+
+---
+
+## 🤖 AI Assistant — Future Feature
+
+A planned intelligent assistant that acts as your **virtual social media strategist:**
+
+| Feature | Description |
+|---|---|
+| 💡 **Video Ideas** | AI suggests content ideas based on your industry, audience, and trending topics |
+| 📈 **Trending Topics** | Real-time trending topic alerts for your niche |
+| ⏰ **Optimal Posting Times** | Data-driven recommendations for when your audience is most active |
+| 📅 **Content Calendar** | AI generates a full month content calendar with themes and video suggestions |
+| 🎄 **Seasonal Campaigns** | Auto-suggests holiday-specific and seasonal promotion ideas |
+| 🏆 **Competitor Analysis** | Monitors competitor social media activity and suggests how to outperform them |
+| 📊 **Performance Insights** | Weekly AI-generated reports explaining what content worked and why |
+
+> This feature will be available in Q1 2026 for Professional plan and above.
 
 ---
 
