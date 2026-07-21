@@ -1,0 +1,277 @@
+// AutoSocial AI — database schema
+// Docs: https://www.prisma.io/docs
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  MANAGER
+  VIEWER
+}
+
+enum Platform {
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  YOUTUBE
+  LINKEDIN
+}
+
+enum VideoStatus {
+  UPLOADING
+  QUEUED
+  PROCESSING
+  READY
+  PUBLISHED
+  FAILED
+}
+
+enum JobType {
+  TRANSCRIBE
+  SUBTITLE
+  SILENCE_REMOVAL
+  EDIT
+  THUMBNAIL
+  CAPTION
+  HASHTAG
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  AGENCY
+  ENTERPRISE
+}
+
+enum NotificationType {
+  UPLOAD_COMPLETE
+  PROCESSING_COMPLETE
+  PUBLISH_SUCCESS
+  PUBLISH_FAILURE
+  SCHEDULE_REMINDER
+}
+
+// ─────────────────────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  avatar    String?
+  role      UserRole @default(OWNER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  businesses    Business[]
+  notifications Notification[]
+  subscription  Subscription?
+}
+
+model Business {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String
+  industry   String?
+  logoUrl    String?
+  brandColor String?  @default("#6366f1")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccounts SocialAccount[]
+  videos         Video[]
+
+  @@index([userId])
+}
+
+model SocialAccount {
+  id           String   @id @default(uuid())
+  businessId   String
+  platform     Platform
+  accountId    String
+  handle       String?
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  followers    Int      @default(0)
+  connected    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
+
+  @@unique([businessId, platform, accountId])
+  @@index([businessId])
+}
+
+model Video {
+  id           String      @id @default(uuid())
+  businessId   String
+  title        String
+  originalUrl  String?
+  processedUrl String?
+  status       VideoStatus @default(UPLOADING)
+  duration     Int?        // seconds
+  fileSize     Int?        // bytes
+  transcript   String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  jobs           VideoJob[]
+  captions       Caption[]
+  hashtags       Hashtag[]
+  thumbnails     Thumbnail[]
+  scheduledPosts ScheduledPost[]
+
+  @@index([businessId])
+  @@index([status])
+}
+
+model VideoJob {
+  id           String    @id @default(uuid())
+  videoId      String
+  jobType      JobType
+  status       JobStatus @default(PENDING)
+  result       Json?
+  errorMessage String?
+  startedAt    DateTime?
+  processedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+}
+
+model Caption {
+  id        String   @id @default(uuid())
+  videoId   String
+  platform  Platform
+  text      String
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+}
+
+model Hashtag {
+  id        String   @id @default(uuid())
+  videoId   String
+  platform  Platform
+  tags      String[]
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+}
+
+model Thumbnail {
+  id        String   @id @default(uuid())
+  videoId   String
+  url       String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+}
+
+model ScheduledPost {
+  id              String     @id @default(uuid())
+  videoId         String
+  socialAccountId String
+  platform        Platform
+  caption         String?
+  hashtags        String[]
+  thumbnailUrl    String?
+  status          PostStatus @default(DRAFT)
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  externalPostId  String?
+  errorMessage    String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  video         Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  analytics     Analytics?
+
+  @@index([videoId])
+  @@index([socialAccountId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+model Analytics {
+  id              String   @id @default(uuid())
+  scheduledPostId String   @unique
+  views           Int      @default(0)
+  likes           Int      @default(0)
+  comments        Int      @default(0)
+  shares          Int      @default(0)
+  reach           Int      @default(0)
+  engagementRate  Float    @default(0)
+  recordedAt      DateTime @default(now())
+
+  scheduledPost ScheduledPost @relation(fields: [scheduledPostId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  plan             SubscriptionPlan @default(FREE)
+  status           String           @default("active")
+  currentPeriodEnd DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
