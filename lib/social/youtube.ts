@@ -120,10 +120,38 @@ export async function getChannel(accessToken: string) {
   };
 }
 
+const THUMB_UPLOAD = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
+
+/**
+ * Upload a custom thumbnail for a video. Best-effort: YouTube only allows custom
+ * thumbnails on phone-verified channels, so a 403 here is logged, not thrown —
+ * the publish itself has already succeeded.
+ */
+async function setCustomThumbnail(videoId: string, thumbnailUrl: string, token: string): Promise<void> {
+  try {
+    const img = await fetch(thumbnailUrl);
+    if (!img.ok) return;
+    const contentType = img.headers.get("content-type") || "image/jpeg";
+    const bytes = Buffer.from(await img.arrayBuffer());
+    const res = await fetch(`${THUMB_UPLOAD}?videoId=${videoId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": contentType },
+      body: bytes,
+    });
+    if (!res.ok) {
+      logger.warn({ videoId, err: await res.text() }, "youtube: thumbnail set skipped (channel may be unverified)");
+    } else {
+      logger.info({ videoId }, "youtube: custom thumbnail set");
+    }
+  } catch (err) {
+    logger.warn({ videoId, err: String(err) }, "youtube: thumbnail set error");
+  }
+}
+
 export const youtubePublisher: SocialPublisher = {
   platform: "YOUTUBE",
 
-  async publish({ videoUrl, caption, hashtags, account }: PublishInput): Promise<PublishResult> {
+  async publish({ videoUrl, thumbnailUrl, caption, hashtags, account }: PublishInput): Promise<PublishResult> {
     const token = await ensureAccessToken(account);
 
     // Fetch the processed video bytes from object storage.
@@ -161,6 +189,9 @@ export const youtubePublisher: SocialPublisher = {
     });
     if (!up.ok) throw new Error(`YouTube upload failed: ${await up.text()}`);
     const result = await up.json();
+
+    // Set a custom thumbnail (best-effort — requires a verified channel).
+    if (thumbnailUrl) await setCustomThumbnail(result.id, thumbnailUrl, token);
 
     logger.info({ videoId: result.id }, "youtube: published");
     return { externalPostId: result.id, url: `https://youtube.com/watch?v=${result.id}` };
