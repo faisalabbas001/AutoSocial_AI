@@ -20,15 +20,21 @@ export async function publishPost(scheduledPostId: string) {
 
   try {
     const publisher = getPublisher(post.platform);
+    const account = {
+      id: post.socialAccount.id,
+      accessToken: post.socialAccount.accessToken,
+      refreshToken: post.socialAccount.refreshToken,
+      expiresAt: post.socialAccount.expiresAt,
+    };
     const result = await publisher.publish({
       videoUrl: post.video.processedUrl ?? post.video.originalUrl ?? "",
       thumbnailUrl: post.thumbnailUrl,
       caption: post.caption ?? "",
       hashtags: post.hashtags,
-      accessToken: post.socialAccount.accessToken,
+      account,
     });
 
-    const metrics = await publisher.fetchMetrics(result.externalPostId, post.socialAccount.accessToken);
+    const metrics = await publisher.fetchMetrics(result.externalPostId, account);
     const engagementRate =
       metrics.views > 0 ? (metrics.likes + metrics.comments + metrics.shares) / metrics.views : 0;
 

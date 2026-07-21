@@ -1,17 +1,17 @@
 import type { Platform, PublishInput, PublishResult, PlatformMetrics, SocialPublisher } from "./types";
+import { youtubePublisher, youtubeConfigured } from "./youtube";
 
 export * from "./types";
 
 /**
- * Stub publisher used for every platform until real API credentials + app review
- * are in place. It simulates a successful publish so the end-to-end pipeline is
- * exercisable. Swap individual platforms for real implementations (Instagram
- * Graph API, TikTok Content Posting API, YouTube Data API v3, etc.) as they go live.
+ * Stub publisher used for platforms without a real integration yet. It simulates
+ * a successful publish so the end-to-end pipeline stays exercisable. Real
+ * implementations (e.g. YouTube) are swapped in below as they come online.
  */
 function makeStub(platform: Platform): SocialPublisher {
   return {
     platform,
-    async publish(input: PublishInput): Promise<PublishResult> {
+    async publish(_input: PublishInput): Promise<PublishResult> {
       const id = `${platform.toLowerCase()}_${Math.random().toString(36).slice(2, 11)}`;
       return { externalPostId: id, url: `https://example.com/${platform.toLowerCase()}/${id}` };
     },
@@ -29,7 +29,7 @@ function makeStub(platform: Platform): SocialPublisher {
   };
 }
 
-const publishers: Record<Platform, SocialPublisher> = {
+const stubs: Record<Platform, SocialPublisher> = {
   INSTAGRAM: makeStub("INSTAGRAM"),
   FACEBOOK: makeStub("FACEBOOK"),
   TIKTOK: makeStub("TIKTOK"),
@@ -38,5 +38,6 @@ const publishers: Record<Platform, SocialPublisher> = {
 };
 
 export function getPublisher(platform: Platform): SocialPublisher {
-  return publishers[platform];
+  if (platform === "YOUTUBE" && youtubeConfigured()) return youtubePublisher;
+  return stubs[platform];
 }

@@ -1,11 +1,19 @@
 export type Platform = "INSTAGRAM" | "FACEBOOK" | "TIKTOK" | "YOUTUBE" | "LINKEDIN";
 
+/** The connected account a post publishes through (tokens included for refresh). */
+export interface PublishAccount {
+  id: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  expiresAt: Date | null;
+}
+
 export interface PublishInput {
   videoUrl: string;
   thumbnailUrl?: string | null;
   caption: string;
   hashtags: string[];
-  accessToken: string | null;
+  account: PublishAccount;
 }
 
 export interface PublishResult {
@@ -24,5 +32,5 @@ export interface PlatformMetrics {
 export interface SocialPublisher {
   platform: Platform;
   publish(input: PublishInput): Promise<PublishResult>;
-  fetchMetrics(externalPostId: string, accessToken: string | null): Promise<PlatformMetrics>;
+  fetchMetrics(externalPostId: string, account: PublishAccount): Promise<PlatformMetrics>;
 }
