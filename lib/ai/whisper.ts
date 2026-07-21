@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { openai } from "./client";
+import { aiClient, aiModels } from "./client";
 
 export interface TranscriptResult {
   text: string;
@@ -13,12 +13,12 @@ export interface TranscriptResult {
  * Falls back to a deterministic mock when no API key is present.
  */
 export async function transcribe(filePath: string): Promise<TranscriptResult> {
-  const ai = openai();
+  const ai = aiClient();
   if (!ai) return mockTranscript();
 
   const res = await ai.audio.transcriptions.create({
     file: fs.createReadStream(filePath),
-    model: "whisper-1",
+    model: aiModels().transcribe,
     response_format: "verbose_json",
     timestamp_granularities: ["segment"],
   });

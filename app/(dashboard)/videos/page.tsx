@@ -5,6 +5,7 @@ import { getCurrentBusiness } from "@/lib/current";
 import { Topbar } from "@/components/dashboard/topbar";
 import { Card } from "@/components/ui/card";
 import { VideoStatusBadge } from "@/components/shared/status-badge";
+import { PublishDialog } from "@/components/video/publish-dialog";
 import { buttonVariants } from "@/components/ui/button";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
@@ -22,6 +23,14 @@ export default async function VideosPage() {
         },
       })
     : [];
+  const accounts = business
+    ? await prisma.socialAccount.findMany({
+        where: { businessId: business.id, connected: true },
+        select: { platform: true },
+      })
+    : [];
+
+  const connectedPlatforms = [...new Set(accounts.map((a) => a.platform))];
 
   return (
     <>
@@ -51,6 +60,13 @@ export default async function VideosPage() {
                     <span>{v.duration ? formatDuration(v.duration) : "—"}</span>
                     <span>{v.fileSize ? formatBytes(v.fileSize) : "—"}</span>
                     <span>{v._count.scheduledPosts} posts</span>
+                  </div>
+                  <div className="mt-3">
+                    <PublishDialog
+                      videoId={v.id}
+                      connectedPlatforms={connectedPlatforms}
+                      disabled={v.status !== "READY" && v.status !== "PUBLISHED"}
+                    />
                   </div>
                 </div>
               </Card>

@@ -1,4 +1,4 @@
-import { openai } from "./client";
+import { aiClient, aiModels } from "./client";
 import type { CaptionPlatform } from "./caption";
 
 export interface HashtagInput {
@@ -17,11 +17,11 @@ const COUNT: Record<CaptionPlatform, number> = {
 
 /** Generate a platform-appropriate hashtag set with GPT-4o. Mock fallback without a key. */
 export async function generateHashtags(input: HashtagInput): Promise<string[]> {
-  const ai = openai();
+  const ai = aiClient();
   if (!ai) return mockHashtags(input);
 
   const res = await ai.chat.completions.create({
-    model: "gpt-4o",
+    model: aiModels().chat,
     temperature: 0.7,
     messages: [
       {

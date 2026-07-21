@@ -7,6 +7,7 @@ import { z } from "zod";
 const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
+  GROQ_API_KEY: z.string().optional().default(""),
   OPENAI_API_KEY: z.string().optional().default(""),
   S3_ENDPOINT: z.string().optional().default(""),
   S3_REGION: z.string().default("auto"),

@@ -1,4 +1,4 @@
-import { openai } from "./client";
+import { aiClient, aiModels } from "./client";
 
 export type CaptionPlatform = "INSTAGRAM" | "TIKTOK" | "YOUTUBE" | "FACEBOOK" | "LINKEDIN";
 
@@ -19,11 +19,11 @@ const STYLE: Record<CaptionPlatform, string> = {
 
 /** Generate a platform-tailored caption with GPT-4o. Mock fallback without a key. */
 export async function generateCaption(input: CaptionInput): Promise<string> {
-  const ai = openai();
+  const ai = aiClient();
   if (!ai) return mockCaption(input);
 
   const res = await ai.chat.completions.create({
-    model: "gpt-4o",
+    model: aiModels().chat,
     temperature: 0.8,
     messages: [
       {

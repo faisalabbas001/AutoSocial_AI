@@ -16,6 +16,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const onSelect = useCallback((f: File | null) => {
@@ -32,29 +33,38 @@ export default function UploadPage() {
   async function startUpload() {
     if (!file) return;
     setPhase("uploading");
+    setProgress(0);
     setError(null);
 
     // Read duration from the file for a realistic record.
     const duration = await readDuration(file).catch(() => undefined);
 
-    const res = await fetch("/api/videos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: file.name.replace(/\.[^.]+$/, ""),
-        fileSize: file.size,
-        duration,
-      }),
-    });
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", file.name.replace(/\.[^.]+$/, ""));
+    if (duration) form.append("duration", String(duration));
 
-    if (!res.ok) {
-      setError("Upload failed. Is the dev server + database running?");
+    // XHR gives us real upload progress (fetch doesn't expose it).
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/upload");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setProgress(100);
+        setPhase("done");
+        setTimeout(() => router.push("/videos"), 1200);
+      } else {
+        setError(safeError(xhr.responseText) ?? "Upload failed. Is the server + MinIO running?");
+        setPhase("selected");
+      }
+    };
+    xhr.onerror = () => {
+      setError("Network error during upload.");
       setPhase("selected");
-      return;
-    }
-
-    setPhase("done");
-    setTimeout(() => router.push("/videos"), 1200);
+    };
+    xhr.send(form);
   }
 
   return (
@@ -112,6 +122,21 @@ export default function UploadPage() {
               </div>
             )}
 
+            {(phase === "uploading" || phase === "done") && (
+              <div>
+                <div className="flex justify-between text-xs text-muted mb-1">
+                  <span>{phase === "done" ? "Uploaded" : "Uploading…"}</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted-surface overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-200"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             {error && <p className="text-sm text-danger">{error}</p>}
 
             <div className="flex items-center gap-2">
@@ -136,6 +161,15 @@ export default function UploadPage() {
       </div>
     </>
   );
+}
+
+/** Pull a human-readable error out of a JSON error response, if present. */
+function safeError(text: string): string | null {
+  try {
+    return JSON.parse(text)?.error ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Read a video file's duration (seconds) in the browser. */

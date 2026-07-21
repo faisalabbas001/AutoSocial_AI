@@ -1,3 +1,6 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeFile, unlink } from "node:fs/promises";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { transcribe } from "@/lib/ai/whisper";
@@ -23,14 +26,18 @@ export async function processVideo(videoId: string) {
   await prisma.video.update({ where: { id: videoId }, data: { status: "PROCESSING" } });
   logger.info({ videoId }, "pipeline: start");
 
-  // 1. Transcribe (Whisper)
+  // 1. Transcribe (Whisper). Download the stored file to a temp path first so
+  // the transcription API can read local bytes; fall back to mock on any failure.
   const transcript = await step(videoId, "TRANSCRIBE", async () => {
-    const result = video.originalUrl
-      ? await transcribe(video.originalUrl).catch(() => null)
-      : null;
-    const t = result ?? (await transcribe("")); // mock fallback
-    await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
-    return { language: t.language, chars: t.text.length };
+    let localPath: string | null = null;
+    try {
+      if (video.originalUrl?.startsWith("http")) localPath = await downloadToTemp(video.originalUrl);
+      const t = await transcribe(localPath ?? "");
+      await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
+      return { language: t.language, chars: t.text.length, source: localPath ? "file" : "mock" };
+    } finally {
+      if (localPath) await unlink(localPath).catch(() => {});
+    }
   });
 
   const transcriptText =
@@ -95,6 +102,17 @@ export async function processVideo(videoId: string) {
 
   logger.info({ videoId }, "pipeline: complete");
   return { videoId, status: "READY" as const, transcript };
+}
+
+/** Download a remote object to a temp file and return its local path. */
+async function downloadToTemp(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`download failed: ${res.status}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const ext = url.split(".").pop()?.split("?")[0]?.slice(0, 5) || "mp4";
+  const path = join(tmpdir(), `autosocial-${Date.now()}.${ext}`);
+  await writeFile(path, buf);
+  return path;
 }
 
 /** Wrap a pipeline step in a VideoJob record with timing + error capture. */
