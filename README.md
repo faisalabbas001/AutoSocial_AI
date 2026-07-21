@@ -20,8 +20,41 @@
 
 ---
 
+## 🚦 Project Status — For Developers
+
+> **📖 This README is the product vision.** For how to **install, run, and demo the
+> actual code**, start with **[GETTING_STARTED.md](GETTING_STARTED.md)**.
+
+The pipeline is **built and working end-to-end** (upload → AI processing → publish →
+analytics). Here's what's real vs. simulated today:
+
+| Capability | Status |
+|---|---|
+| Full dashboard (6 pages), upload, videos, schedule, analytics, settings | ✅ **Real** — live Postgres data |
+| Real video upload → object storage (MinIO/R2) with progress | ✅ **Real** |
+| AI pipeline worker: transcribe → subtitle → silence → edit → thumbnail → caption → hashtag | ✅ **Real**, each step tracked |
+| Captions / hashtags / subtitles (Groq or OpenAI; mock fallback) | ✅ **Real** with a key |
+| Video editing (silence cut, 9:16 crop, subtitle burn, thumbnail) | ✅ **Real when `ffmpeg` installed**, else skipped |
+| **YouTube** publishing — OAuth, upload, thumbnail, real stats | ✅ **Real** with Google creds |
+| Instagram / Facebook / TikTok / LinkedIn publishing | 🟡 **Simulated** stub |
+| Auth / multi-tenant / billing | ❌ Not built yet |
+
+**Quick start** (details in [GETTING_STARTED.md](GETTING_STARTED.md)):
+
+```bash
+npm install
+npm run db:up            # Docker: Postgres + Redis + MinIO
+npm run prisma:migrate
+npm run prisma:seed
+npm run dev              # Terminal 1 → http://localhost:3000
+npm run workers          # Terminal 2 → background worker
+```
+
+---
+
 ## 📋 Table of Contents
 
+- [Project Status (developers)](#-project-status--for-developers)
 - [Overview](#-overview)
 - [Problem Statement](#-problem-statement)
 - [Solution — How AutoSocial AI Reduces Your Costs](#-solution--how-autosocial-ai-reduces-your-costs)
@@ -826,6 +859,10 @@ This is the core value proposition. Here's an honest, detailed cost breakdown:
 ---
 
 ## 🚀 Installation
+
+> ℹ️ **These are the original spec steps.** For the **tested, up-to-date** setup
+> (Groq AI, MinIO, ffmpeg, YouTube OAuth, troubleshooting), follow
+> **[GETTING_STARTED.md](GETTING_STARTED.md)**.
 
 ### Prerequisites
 
