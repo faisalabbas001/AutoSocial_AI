@@ -1,12 +1,15 @@
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 
-/** Resolve once whether an `ffmpeg` binary is on PATH. */
+/** The ffmpeg binary — overridable via FFMPEG_PATH for non-PATH installs. */
+const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
+
+/** Resolve once whether an `ffmpeg` binary is available. */
 let ffmpegAvailable: boolean | null = null;
 
 export async function hasFfmpeg(): Promise<boolean> {
   if (ffmpegAvailable !== null) return ffmpegAvailable;
-  ffmpegAvailable = await run("ffmpeg", ["-version"])
+  ffmpegAvailable = await run(FFMPEG, ["-version"])
     .then(() => true)
     .catch(() => false);
   return ffmpegAvailable;
@@ -30,7 +33,7 @@ async function fileExists(path: string) {
  */
 export async function removeSilence(input: string, output: string, threshold = 1) {
   if (!(await hasFfmpeg())) return { skipped: true, output: input };
-  await run("ffmpeg", [
+  await run(FFMPEG, [
     "-y", "-i", input,
     "-af", `silenceremove=stop_periods=-1:stop_duration=${threshold}:stop_threshold=-30dB`,
     output,
@@ -41,7 +44,7 @@ export async function removeSilence(input: string, output: string, threshold = 1
 /** Convert to vertical 9:16 with smart center crop. */
 export async function toVertical(input: string, output: string) {
   if (!(await hasFfmpeg())) return { skipped: true, output: input };
-  await run("ffmpeg", [
+  await run(FFMPEG, [
     "-y", "-i", input,
     "-vf", "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)',scale=1080:1920",
     "-c:a", "copy",
@@ -53,14 +56,17 @@ export async function toVertical(input: string, output: string) {
 /** Burn an SRT subtitle track into the video. */
 export async function burnSubtitles(input: string, srtPath: string, output: string) {
   if (!(await hasFfmpeg()) || !(await fileExists(srtPath))) return { skipped: true, output: input };
-  await run("ffmpeg", ["-y", "-i", input, "-vf", `subtitles='${srtPath}'`, output]);
+  // The subtitles filter needs forward slashes and an escaped drive-letter colon
+  // on Windows (e.g. C:/path -> C\:/path).
+  const escaped = srtPath.replace(/\\/g, "/").replace(/:/g, "\\:");
+  await run(FFMPEG, ["-y", "-i", input, "-vf", `subtitles='${escaped}'`, output]);
   return { skipped: false, output };
 }
 
 /** Overlay a logo watermark at the top-right. */
 export async function overlayLogo(input: string, logoPath: string, output: string) {
   if (!(await hasFfmpeg()) || !(await fileExists(logoPath))) return { skipped: true, output: input };
-  await run("ffmpeg", [
+  await run(FFMPEG, [
     "-y", "-i", input, "-i", logoPath,
     "-filter_complex", "overlay=W-w-24:24",
     output,
@@ -71,6 +77,6 @@ export async function overlayLogo(input: string, logoPath: string, output: strin
 /** Extract a thumbnail frame at the given timestamp (seconds). */
 export async function extractThumbnail(input: string, output: string, atSeconds = 1) {
   if (!(await hasFfmpeg())) return { skipped: true, output: null };
-  await run("ffmpeg", ["-y", "-ss", String(atSeconds), "-i", input, "-frames:v", "1", output]);
+  await run(FFMPEG, ["-y", "-ss", String(atSeconds), "-i", input, "-frames:v", "1", output]);
   return { skipped: false, output };
 }
