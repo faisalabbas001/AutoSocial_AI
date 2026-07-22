@@ -42,6 +42,7 @@ enum VideoStatus {
 
 enum JobType {
   TRANSCRIBE
+  ANALYZE
   SUBTITLE
   SILENCE_REMOVAL
   EDIT

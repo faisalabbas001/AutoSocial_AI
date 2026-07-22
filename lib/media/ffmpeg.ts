@@ -109,3 +109,43 @@ export async function extractThumbnail(input: string, output: string, atSeconds 
   await run(FFMPEG, ["-y", "-ss", String(atSeconds), "-i", input, "-frames:v", "1", "-q:v", "2", output]);
   return { skipped: false, output };
 }
+
+/**
+ * Extract `count` keyframes spread across the video for visual analysis.
+ * Frames are sampled at even fractions of the duration (or fixed early
+ * timestamps when duration is unknown), downscaled to keep the base64 payload
+ * small. Returns the paths of frames actually written. No-op without ffmpeg.
+ */
+export async function extractKeyframes(
+  input: string,
+  outDir: string,
+  count = 3,
+  durationSeconds?: number | null,
+): Promise<string[]> {
+  if (!(await hasFfmpeg())) return [];
+
+  const timestamps: number[] =
+    durationSeconds && durationSeconds > 1
+      ? Array.from({ length: count }, (_, i) =>
+          Math.max(0.5, Math.round((durationSeconds * (i + 1)) / (count + 1))),
+        )
+      : Array.from({ length: count }, (_, i) => i + 1); // 1s, 2s, 3s fallback
+
+  const paths: string[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const out = `${outDir}/frame_${i}.jpg`;
+    try {
+      await run(FFMPEG, [
+        "-y", "-ss", String(timestamps[i]), "-i", input,
+        "-frames:v", "1",
+        "-vf", "scale='min(512,iw)':-2", // cap width at 512px (keeps vision tokens low)
+        "-q:v", "4",
+        out,
+      ]);
+      if (await fileExists(out)) paths.push(out);
+    } catch {
+      // A timestamp past the end just yields no frame — skip it.
+    }
+  }
+  return paths;
+}

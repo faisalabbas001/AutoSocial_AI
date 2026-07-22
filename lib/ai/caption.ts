@@ -13,6 +13,8 @@ export const CAPTION_PLATFORMS: CaptionPlatform[] = [
 
 export interface CaptionsInput {
   transcript: string;
+  /** Vision-model description of what the video/image visually shows. */
+  visual?: string | null;
   industry?: string | null;
   businessName?: string | null;
   /** Whisper-detected language code (e.g. "en", "ur", "hi"), used as a hint. */
@@ -91,6 +93,16 @@ export async function generateCaptions(
   // Non-Latin transcripts (Devanagari/Urdu script) are romanized to Roman Urdu
   // FIRST, so the caption step works from Latin text and naturally stays Latin.
   const transcript = await romanize(ai, input.transcript);
+  const visual = (input.visual ?? "").trim();
+
+  // The content the caption must be about: what's SHOWN (visual) + what's SAID
+  // (transcript). For silent clips/photos the visual description carries it.
+  const contentBlock = [
+    visual ? `WHAT THE VIDEO SHOWS (visual analysis):\n${visual}` : "",
+    transcript ? `WHAT IS SAID (transcript):\n"""${transcript}"""` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n") || "(no speech or visuals detected — write a short, on-brand caption)";
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     {
@@ -107,7 +119,7 @@ export async function generateCaptions(
       role: "user",
       content:
         `${targetLanguageDirective(input.language)}\n\n` +
-        `VIDEO CONTENT (transcript — what the caption must be about):\n"""${transcript || "(no speech detected — write a short, on-brand caption)"}"""\n\n` +
+        `VIDEO CONTENT (what the caption must be about):\n${contentBlock}\n\n` +
         `Brand for sign-off/CTA only: ${input.businessName ?? "a local business"} (${input.industry ?? "general"})\n` +
         `Per-platform tone:\n${platformStyles}`,
     },

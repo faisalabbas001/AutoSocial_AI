@@ -4,6 +4,7 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { transcribe } from "@/lib/ai/whisper";
+import { analyzeVisual } from "@/lib/ai/vision";
 import { generateCaptions } from "@/lib/ai/caption";
 import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
@@ -13,6 +14,7 @@ import {
   burnSubtitles,
   overlayLogo,
   extractThumbnail,
+  extractKeyframes,
 } from "@/lib/media/ffmpeg";
 import { putObject } from "@/lib/storage";
 import type { JobType, Platform } from "@prisma/client";
@@ -72,6 +74,23 @@ export async function processVideo(videoId: string) {
 
     const transcriptText =
       (await prisma.video.findUnique({ where: { id: videoId } }))?.transcript ?? "";
+
+    // 1b. Analyse what the video VISUALLY shows (sampled keyframes → vision model).
+    // This is what makes captions/hashtags match the real content even with no
+    // speech. Requires ffmpeg (to sample frames) + an AI key; best-effort otherwise.
+    let visual = "";
+    await step(videoId, "ANALYZE", async () => {
+      if (!ffmpegReady || !sourcePath) return { skipped: true, reason: "no ffmpeg/source" };
+      const framePaths = await extractKeyframes(sourcePath, workDir, 2, video.duration);
+      if (framePaths.length === 0) return { skipped: true, reason: "no frames" };
+      const frames = await Promise.all(framePaths.map((p) => readFile(p)));
+      visual = await analyzeVisual({
+        frames,
+        industry: video.business.industry,
+        businessName: video.business.name,
+      });
+      return { frames: framePaths.length, chars: visual.length, description: visual };
+    });
 
     // Track the "current" working file as it passes through each ffmpeg stage.
     let currentPath = sourcePath;
@@ -158,6 +177,7 @@ export async function processVideo(videoId: string) {
     await step(videoId, "CAPTION", async () => {
       const captions = await generateCaptions({
         transcript: transcriptText,
+        visual,
         industry: video.business.industry,
         businessName: video.business.name,
         language,
@@ -178,6 +198,7 @@ export async function processVideo(videoId: string) {
     await step(videoId, "HASHTAG", async () => {
       const hashtags = await generateAllHashtags({
         transcript: transcriptText,
+        visual,
         industry: video.business.industry,
       });
       await prisma.hashtag.deleteMany({ where: { videoId } });

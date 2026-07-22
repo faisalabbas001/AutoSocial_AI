@@ -35,14 +35,17 @@ export function aiClient(): OpenAI | null {
 }
 
 /** Model IDs for the active provider. */
-export function aiModels(): { chat: string; transcribe: string } {
+export function aiModels(): { chat: string; transcribe: string; vision: string } {
   if (aiProvider() === "groq") {
     return {
       chat: process.env.GROQ_CHAT_MODEL || "llama-3.3-70b-versatile",
       transcribe: process.env.GROQ_TRANSCRIBE_MODEL || "whisper-large-v3-turbo",
+      // Multimodal model for analysing video frames / images. Qwen 3.6 VL is the
+      // vision-capable model currently available on Groq's free tier.
+      vision: process.env.GROQ_VISION_MODEL || "qwen/qwen3.6-27b",
     };
   }
-  return { chat: "gpt-4o", transcribe: "whisper-1" };
+  return { chat: "gpt-4o", transcribe: "whisper-1", vision: "gpt-4o" };
 }
 
 export const isMockMode = () => aiProvider() === "mock";

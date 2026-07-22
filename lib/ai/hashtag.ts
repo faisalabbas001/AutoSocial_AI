@@ -3,6 +3,8 @@ import { CAPTION_PLATFORMS, type CaptionPlatform } from "./caption";
 
 export interface HashtagsInput {
   transcript: string;
+  /** Vision-model description of what the video/image visually shows. */
+  visual?: string | null;
   industry?: string | null;
 }
 
@@ -27,6 +29,14 @@ export async function generateAllHashtags(
 
   const counts = CAPTION_PLATFORMS.map((p) => `- ${p}: about ${COUNT[p]} tags`).join("\n");
 
+  const contentBlock =
+    [
+      input.visual ? `What the video shows: ${input.visual}` : "",
+      input.transcript ? `What is said: """${input.transcript}"""` : "",
+    ]
+      .filter(Boolean)
+      .join("\n") || "(no speech or visuals detected)";
+
   try {
     const res = await ai.chat.completions.create({
       model: aiModels().chat,
@@ -47,7 +57,7 @@ export async function generateAllHashtags(
         {
           role: "user",
           content:
-            `VIDEO CONTENT (transcript — base hashtags on this):\n"""${input.transcript || "(no speech detected)"}"""\n\n` +
+            `VIDEO CONTENT (base hashtags on this):\n${contentBlock}\n\n` +
             `Brand/industry context: ${input.industry ?? "general"}\n` +
             `Counts per platform:\n${counts}`,
         },
