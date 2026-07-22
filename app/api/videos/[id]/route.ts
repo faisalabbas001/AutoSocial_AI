@@ -1,7 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
+import type { Platform } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+
+const PLATFORM = z.enum(["INSTAGRAM", "FACEBOOK", "TIKTOK", "YOUTUBE", "LINKEDIN"]);
+
+const patchSchema = z.object({
+  captions: z.array(z.object({ platform: PLATFORM, text: z.string() })).optional(),
+  hashtags: z.array(z.object({ platform: PLATFORM, tags: z.array(z.string()) })).optional(),
+});
+
+/**
+ * Save reviewer edits to per-platform captions/hashtags before publishing.
+ * Updates existing rows (created by the pipeline); no-ops for platforms not sent.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const parsed = patchSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  const video = await prisma.video.findUnique({ where: { id }, select: { id: true } });
+  if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const { captions = [], hashtags = [] } = parsed.data;
+
+  await prisma.$transaction([
+    ...captions.map((c) =>
+      prisma.caption.updateMany({
+        where: { videoId: id, platform: c.platform as Platform },
+        data: { text: c.text },
+      }),
+    ),
+    ...hashtags.map((h) =>
+      prisma.hashtag.updateMany({
+        where: { videoId: id, platform: h.platform as Platform },
+        data: { tags: h.tags },
+      }),
+    ),
+  ]);
+
+  return NextResponse.json({ ok: true });
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

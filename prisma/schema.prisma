@@ -6,8 +6,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations use a direct (session-pooler) connection; app runtime uses the
+  // transaction pooler in DATABASE_URL. `prisma migrate` reads directUrl.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────

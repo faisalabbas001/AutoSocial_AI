@@ -1,10 +1,9 @@
 import { aiClient, aiModels } from "./client";
-import type { CaptionPlatform } from "./caption";
+import { CAPTION_PLATFORMS, type CaptionPlatform } from "./caption";
 
-export interface HashtagInput {
+export interface HashtagsInput {
   transcript: string;
   industry?: string | null;
-  platform: CaptionPlatform;
 }
 
 const COUNT: Record<CaptionPlatform, number> = {
@@ -15,37 +14,92 @@ const COUNT: Record<CaptionPlatform, number> = {
   LINKEDIN: 4,
 };
 
-/** Generate a platform-appropriate hashtag set with GPT-4o. Mock fallback without a key. */
-export async function generateHashtags(input: HashtagInput): Promise<string[]> {
+/**
+ * Generate platform-appropriate hashtag sets for ALL platforms in a SINGLE model
+ * call (returns JSON), keeping cost/latency low. Hashtags are always in Latin
+ * script (works for Roman Urdu and English alike). Mock fallback without a key.
+ */
+export async function generateAllHashtags(
+  input: HashtagsInput,
+): Promise<Record<CaptionPlatform, string[]>> {
   const ai = aiClient();
-  if (!ai) return mockHashtags(input);
+  if (!ai) return mockAllHashtags();
 
-  const res = await ai.chat.completions.create({
-    model: aiModels().chat,
-    temperature: 0.7,
-    messages: [
-      {
-        role: "system",
-        content:
-          "Generate a mix of trending, niche, local and brand hashtags for the given " +
-          "platform. Return ONLY a comma-separated list, each starting with #.",
-      },
-      {
-        role: "user",
-        content: `Industry: ${input.industry ?? "general"}\nPlatform: ${input.platform} (about ${COUNT[input.platform]} tags)\nTranscript:\n"""${input.transcript}"""`,
-      },
-    ],
-  });
+  const counts = CAPTION_PLATFORMS.map((p) => `- ${p}: about ${COUNT[p]} tags`).join("\n");
 
-  const raw = res.choices[0]?.message?.content ?? "";
-  const tags = raw
-    .split(/[\s,]+/)
-    .filter((t) => t.startsWith("#"))
-    .slice(0, COUNT[input.platform]);
-  return tags.length ? tags : mockHashtags(input);
+  try {
+    const res = await ai.chat.completions.create({
+      model: aiModels().chat,
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You generate hashtags that match the ACTUAL video content first, then add a few " +
+            "niche, trending and brand tags. Base them on what the video is really about (the transcript), " +
+            "not just the business industry. " +
+            "Every hashtag starts with # and uses Latin letters only (no spaces, no Devanagari/Arabic script). " +
+            "Return ONLY a JSON object whose keys are exactly " +
+            CAPTION_PLATFORMS.join(", ") +
+            " and whose values are arrays of hashtag strings.",
+        },
+        {
+          role: "user",
+          content:
+            `VIDEO CONTENT (transcript — base hashtags on this):\n"""${input.transcript || "(no speech detected)"}"""\n\n` +
+            `Brand/industry context: ${input.industry ?? "general"}\n` +
+            `Counts per platform:\n${counts}`,
+        },
+      ],
+    });
+
+    const parsed = parseJson(res.choices[0]?.message?.content ?? "");
+    const fallback = mockAllHashtags();
+    const out = {} as Record<CaptionPlatform, string[]>;
+    for (const p of CAPTION_PLATFORMS) {
+      const raw = parsed?.[p];
+      const tags = Array.isArray(raw)
+        ? raw
+            .map((t) => String(t).trim())
+            .filter((t) => t.startsWith("#"))
+            .slice(0, COUNT[p])
+        : [];
+      out[p] = tags.length ? tags : fallback[p];
+    }
+    return out;
+  } catch {
+    return mockAllHashtags();
+  }
 }
 
-function mockHashtags(input: HashtagInput): string[] {
-  const base = ["#SmallBusiness", "#LocalBusiness", "#Transformation", "#BeforeAndAfter", "#Trending", "#Reels", "#ForYou", "#GlowUp"];
-  return base.slice(0, COUNT[input.platform]);
+function parseJson(raw: string): Record<string, unknown> | null {
+  const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+function mockAllHashtags(): Record<CaptionPlatform, string[]> {
+  const base = [
+    "#SmallBusiness", "#LocalBusiness", "#Transformation", "#BeforeAndAfter",
+    "#Trending", "#Reels", "#ForYou", "#GlowUp", "#Community", "#SupportLocal",
+    "#Viral", "#Explore", "#Motivation", "#Results", "#BookNow", "#Quality",
+    "#Service", "#Team", "#Happy", "#Review", "#Local", "#Business", "#Care",
+    "#Trust", "#New",
+  ];
+  const out = {} as Record<CaptionPlatform, string[]>;
+  for (const p of CAPTION_PLATFORMS) out[p] = base.slice(0, COUNT[p]);
+  return out;
 }

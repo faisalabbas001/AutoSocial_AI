@@ -4,8 +4,8 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { transcribe } from "@/lib/ai/whisper";
-import { generateCaption, type CaptionPlatform } from "@/lib/ai/caption";
-import { generateHashtags } from "@/lib/ai/hashtag";
+import { generateCaptions } from "@/lib/ai/caption";
+import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
   hasFfmpeg,
   removeSilence,
@@ -15,9 +15,14 @@ import {
   extractThumbnail,
 } from "@/lib/media/ffmpeg";
 import { putObject } from "@/lib/storage";
-import type { JobType } from "@prisma/client";
+import type { JobType, Platform } from "@prisma/client";
 
-const PLATFORMS: CaptionPlatform[] = ["INSTAGRAM", "TIKTOK", "YOUTUBE", "FACEBOOK", "LINKEDIN"];
+/**
+ * Silence removal only trims the audio stream, which drifts audio out of sync
+ * with the (untrimmed) video. It's therefore OFF by default so processed videos
+ * always play back correctly. Opt in with ENABLE_SILENCE_REMOVAL=true.
+ */
+const SILENCE_REMOVAL_ENABLED = process.env.ENABLE_SILENCE_REMOVAL === "true";
 
 /**
  * Runs the full AI processing pipeline for a video, recording each step as a
@@ -53,14 +58,16 @@ export async function processVideo(videoId: string) {
 
     // 1. Transcribe (Whisper) — also yields an SRT track for subtitle burning.
     let srtPath: string | null = null;
+    let language = "en";
     await step(videoId, "TRANSCRIBE", async () => {
       const t = await transcribe(sourcePath ?? "");
+      language = t.language || "en";
       await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
       if (t.srt) {
         srtPath = join(workDir, "subs.srt");
         await writeFile(srtPath, t.srt);
       }
-      return { language: t.language, chars: t.text.length, source: sourcePath ? "file" : "mock" };
+      return { language, chars: t.text.length, source: sourcePath ? "file" : "mock" };
     });
 
     const transcriptText =
@@ -73,8 +80,9 @@ export async function processVideo(videoId: string) {
     // 2. Subtitle track (SRT already written above)
     await step(videoId, "SUBTITLE", async () => ({ generated: Boolean(srtPath) }));
 
-    // 3. Silence removal
+    // 3. Silence removal (off by default — keeps audio/video in sync)
     await step(videoId, "SILENCE_REMOVAL", async () => {
+      if (!SILENCE_REMOVAL_ENABLED) return { skipped: true, reason: "disabled (A/V sync)" };
       if (!ffmpegReady || !currentPath) return { skipped: true };
       const out = join(workDir, "nosilence.mp4");
       const r = await removeSilence(currentPath, out);
@@ -146,31 +154,41 @@ export async function processVideo(videoId: string) {
       return { real };
     });
 
-    // 6. Captions (per platform)
+    // 6. Captions — one batched, language-aware model call for all platforms.
     await step(videoId, "CAPTION", async () => {
-      for (const platform of PLATFORMS) {
-        const text = await generateCaption({
-          transcript: transcriptText,
-          industry: video.business.industry,
-          businessName: video.business.name,
-          platform,
-        });
-        await prisma.caption.create({ data: { videoId, platform, text } });
-      }
-      return { platforms: PLATFORMS.length };
+      const captions = await generateCaptions({
+        transcript: transcriptText,
+        industry: video.business.industry,
+        businessName: video.business.name,
+        language,
+      });
+      // Idempotent: clear any prior run's captions before writing fresh ones.
+      await prisma.caption.deleteMany({ where: { videoId } });
+      await prisma.caption.createMany({
+        data: Object.entries(captions).map(([platform, text]) => ({
+          videoId,
+          platform: platform as Platform,
+          text,
+        })),
+      });
+      return { platforms: Object.keys(captions).length, language };
     });
 
-    // 7. Hashtags (per platform)
+    // 7. Hashtags — one batched model call for all platforms.
     await step(videoId, "HASHTAG", async () => {
-      for (const platform of PLATFORMS) {
-        const tags = await generateHashtags({
-          transcript: transcriptText,
-          industry: video.business.industry,
-          platform,
-        });
-        await prisma.hashtag.create({ data: { videoId, platform, tags } });
-      }
-      return { platforms: PLATFORMS.length };
+      const hashtags = await generateAllHashtags({
+        transcript: transcriptText,
+        industry: video.business.industry,
+      });
+      await prisma.hashtag.deleteMany({ where: { videoId } });
+      await prisma.hashtag.createMany({
+        data: Object.entries(hashtags).map(([platform, tags]) => ({
+          videoId,
+          platform: platform as Platform,
+          tags,
+        })),
+      });
+      return { platforms: Object.keys(hashtags).length };
     });
 
     await prisma.video.update({
