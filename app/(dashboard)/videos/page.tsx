@@ -65,7 +65,7 @@ export default async function VideosPage({
           </Card>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
               {videos.map((v) => {
                 const reviewable = v.status === "READY" || v.status === "PUBLISHED";
                 const thumb = v.thumbnails[0]?.url;
@@ -124,17 +124,17 @@ export default async function VideosPage({
                         </span>
                       </div>
 
-                      <div className="mt-3 flex gap-2 pt-1">
+                      <div className="mt-3 flex items-center gap-1.5 pt-1">
                         <Link
                           href={`/videos/${v.id}`}
                           className={cn(
                             buttonVariants({ size: "sm" }),
-                            "flex-1",
+                            "min-w-0 flex-1 px-2",
                             !reviewable && "pointer-events-none opacity-50",
                           )}
                           aria-disabled={!reviewable}
                         >
-                          Review & Publish
+                          Review
                         </Link>
                         <PublishDialog videoId={v.id} connectedPlatforms={connectedPlatforms} disabled={!reviewable} />
                         <DeleteVideoButton videoId={v.id} title={v.title} />

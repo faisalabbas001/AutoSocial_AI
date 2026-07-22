@@ -29,7 +29,7 @@ export function DeleteVideoButton({ videoId, title }: { videoId: string; title: 
       disabled={busy}
       title="Delete video"
       aria-label="Delete video"
-      className="text-muted hover:text-danger"
+      className="h-8 w-8 shrink-0 text-muted hover:text-danger"
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
     </Button>

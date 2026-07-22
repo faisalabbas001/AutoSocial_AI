@@ -26,10 +26,18 @@ export function aiClient(): OpenAI | null {
   if (provider === "mock") return null;
   if (client) return client;
 
+  // Fail FAST, don't hang. The OpenAI SDK defaults to a 10-MINUTE timeout with 2
+  // retries — so if the provider is slow, blocked, or unreachable, a single call
+  // can freeze a pipeline step for many minutes. Every AI call here has a mock/
+  // fallback path, so a short timeout + one retry means we degrade in ~seconds
+  // instead of stalling. Overridable via AI_TIMEOUT_MS.
+  const timeout = Number(process.env.AI_TIMEOUT_MS) || 45_000;
+  const opts = { timeout, maxRetries: 1 };
+
   client =
     provider === "groq"
-      ? new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1" })
-      : new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      ? new OpenAI({ apiKey: process.env.GROQ_API_KEY, baseURL: "https://api.groq.com/openai/v1", ...opts })
+      : new OpenAI({ apiKey: process.env.OPENAI_API_KEY, ...opts });
 
   return client;
 }

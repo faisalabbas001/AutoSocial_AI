@@ -2,7 +2,10 @@ import Link from "next/link";
 import { Camera, Globe, Video, AtSign, Music2, Link2, CheckCircle2, AlertCircle } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getCurrentBusiness } from "@/lib/current";
-import { youtubeConfigured, redirectUri } from "@/lib/social/youtube";
+import { youtubeConfigured } from "@/lib/social/youtube";
+import { metaConfigured } from "@/lib/social/meta";
+import { tiktokConfigured } from "@/lib/social/tiktok";
+import { redirectUriFor } from "@/lib/social/oauth";
 import { Topbar } from "@/components/dashboard/topbar";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,12 +24,41 @@ const PLATFORM_META: Record<Platform, { label: string; icon: typeof Camera }> = 
   LINKEDIN: { label: "LinkedIn", icon: AtSign },
 };
 
+/** Which platforms have a live OAuth flow, and where their "Connect" button points. */
+const CONNECT: Record<Platform, { path: string; configured: boolean } | null> = {
+  YOUTUBE: { path: "/api/social/youtube/connect", configured: youtubeConfigured() },
+  FACEBOOK: { path: "/api/social/facebook/connect", configured: metaConfigured() },
+  INSTAGRAM: { path: "/api/social/instagram/connect", configured: metaConfigured() },
+  TIKTOK: { path: "/api/social/tiktok/connect", configured: tiktokConfigured() },
+  LINKEDIN: null, // not wired yet
+};
+
+const CONNECTED_LABEL: Record<string, string> = {
+  youtube: "YouTube channel",
+  facebook: "Facebook Page",
+  instagram: "Instagram account",
+  tiktok: "TikTok account",
+};
+
 const ERROR_MESSAGES: Record<string, string> = {
+  oauth_state: "Security check failed. Please try connecting again.",
+  no_business: "No business found. Run the seed script.",
   youtube_not_configured: "YouTube isn't configured — add YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET to .env.local.",
   youtube_denied: "YouTube connection was cancelled.",
   youtube_state: "Security check failed. Please try connecting again.",
   youtube_failed: "Couldn't connect YouTube — check your credentials and the authorized redirect URI.",
-  no_business: "No business found. Run the seed script.",
+  facebook_not_configured: "Facebook isn't configured — add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local.",
+  facebook_denied: "Facebook connection was cancelled.",
+  facebook_no_page: "No Facebook Page found on that account. You need a Page to publish.",
+  facebook_failed: "Couldn't connect Facebook — check your app credentials and redirect URI.",
+  instagram_not_configured: "Instagram uses your Meta app — add FACEBOOK_APP_ID and FACEBOOK_APP_SECRET to .env.local.",
+  instagram_denied: "Instagram connection was cancelled.",
+  instagram_no_account:
+    "No Instagram Business account found. Link an IG Business/Creator account to your Facebook Page first.",
+  instagram_failed: "Couldn't connect Instagram — check your Meta app credentials and redirect URI.",
+  tiktok_not_configured: "TikTok isn't configured — add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to .env.local.",
+  tiktok_denied: "TikTok connection was cancelled.",
+  tiktok_failed: "Couldn't connect TikTok — check your app keys and redirect URI.",
 };
 
 export default async function SettingsPage({
@@ -42,15 +74,14 @@ export default async function SettingsPage({
 
   const connectedByPlatform = new Map(accounts.map((a) => [a.platform, a]));
   const allPlatforms = Object.keys(PLATFORM_META) as Platform[];
-  const ytReady = youtubeConfigured();
 
   return (
     <>
       <Topbar title="Settings" subtitle="Business profile & connected accounts" />
       <div className="p-6 space-y-6 max-w-3xl">
-        {connected === "youtube" && (
+        {connected && CONNECTED_LABEL[connected] && (
           <Banner tone="success">
-            <CheckCircle2 className="h-4.5 w-4.5" /> YouTube channel connected successfully.
+            <CheckCircle2 className="h-4.5 w-4.5" /> {CONNECTED_LABEL[connected]} connected successfully.
           </Banner>
         )}
         {error && (
@@ -82,7 +113,7 @@ export default async function SettingsPage({
               const meta = PLATFORM_META[platform];
               const account = connectedByPlatform.get(platform);
               const Icon = meta.icon;
-              const isYouTube = platform === "YOUTUBE";
+              const conn = CONNECT[platform];
               return (
                 <div key={platform} className="flex items-center gap-3 rounded-lg border p-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted-surface">
@@ -91,9 +122,9 @@ export default async function SettingsPage({
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
                       {meta.label}
-                      {isYouTube && (
+                      {conn && (
                         <Badge variant="primary" className="ml-2 align-middle">
-                          Live integration
+                          Live
                         </Badge>
                       )}
                     </p>
@@ -122,31 +153,46 @@ export default async function SettingsPage({
                         </button>
                       </form>
                     </div>
-                  ) : isYouTube && ytReady ? (
-                    <Link href="/api/social/youtube/connect" className={cn(buttonVariants({ size: "sm" }))}>
+                  ) : conn && conn.configured ? (
+                    <Link href={conn.path} className={cn(buttonVariants({ size: "sm" }))}>
                       <Link2 className="h-4 w-4" /> Connect
                     </Link>
                   ) : (
                     <span className={cn(buttonVariants({ size: "sm", variant: "outline" }), "opacity-50 pointer-events-none")}>
-                      {isYouTube ? "Add credentials" : "Soon"}
+                      {conn ? "Add credentials" : "Soon"}
                     </span>
                   )}
                 </div>
               );
             })}
 
-            <div className="rounded-lg bg-muted-surface p-3 text-xs text-muted space-y-1">
-              <p className="font-medium text-foreground">YouTube is a live integration.</p>
+            <div className="rounded-lg bg-muted-surface p-3 text-xs text-muted space-y-2">
+              <p className="font-medium text-foreground">Connecting accounts</p>
               <p>
-                Create an OAuth client at console.cloud.google.com (enable “YouTube Data API v3”), then set
-                <code className="mx-1 rounded bg-surface px-1 py-0.5">YOUTUBE_CLIENT_ID</code> /
-                <code className="mx-1 rounded bg-surface px-1 py-0.5">YOUTUBE_CLIENT_SECRET</code>.
+                Each “Connect” opens the platform’s own login — users approve access and come straight back. No
+                passwords are ever entered here. Add each app’s credentials to <code className="rounded bg-surface px-1 py-0.5">.env.local</code>,
+                then register these exact <span className="font-medium">Authorized redirect URIs</span>:
               </p>
+              <ul className="space-y-1">
+                <li>
+                  YouTube (Google Cloud, “YouTube Data API v3”):{" "}
+                  <code className="rounded bg-surface px-1 py-0.5">{redirectUriFor("/api/social/youtube/callback")}</code>
+                </li>
+                <li>
+                  Facebook &amp; Instagram (one Meta app, “Facebook Login”):{" "}
+                  <code className="rounded bg-surface px-1 py-0.5">{redirectUriFor("/api/social/facebook/callback")}</code>{" "}
+                  and{" "}
+                  <code className="rounded bg-surface px-1 py-0.5">{redirectUriFor("/api/social/instagram/callback")}</code>
+                </li>
+                <li>
+                  TikTok (developer portal, “Content Posting API”):{" "}
+                  <code className="rounded bg-surface px-1 py-0.5">{redirectUriFor("/api/social/tiktok/callback")}</code>
+                </li>
+              </ul>
               <p>
-                Authorized redirect URI:{" "}
-                <code className="rounded bg-surface px-1 py-0.5">{redirectUri()}</code>
+                Instagram needs an IG <span className="font-medium">Business/Creator</span> account linked to your
+                Facebook Page. Platforms without credentials publish via a stub so the pipeline stays testable.
               </p>
-              <p>Other platforms currently publish via a stub until their APIs are wired.</p>
             </div>
           </CardContent>
         </Card>

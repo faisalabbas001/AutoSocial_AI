@@ -147,7 +147,13 @@ model Video {
   status       VideoStatus @default(UPLOADING)
   duration     Int?        // seconds
   fileSize     Int?        // bytes
+  width        Int?        // source pixel width (probed)
+  height       Int?        // source pixel height (probed)
   transcript   String?
+  // Reviewer edit controls applied at publish time (see renditionForPlatform):
+  subtitlesEnabled Boolean @default(true) // burn transcript subtitles into the rendition
+  trimStart        Int?                   // trim in-point, seconds (null = start)
+  trimEnd          Int?                   // trim out-point, seconds (null = end)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 

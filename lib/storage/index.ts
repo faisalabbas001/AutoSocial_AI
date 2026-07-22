@@ -6,6 +6,7 @@ import {
   HeadBucketCommand,
   CreateBucketCommand,
   PutBucketPolicyCommand,
+  PutBucketCorsCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -64,6 +65,29 @@ export async function ensureBucket(): Promise<void> {
         /* policy is best-effort; R2 handles public access differently */
       });
   }
+
+  // Allow the browser to PUT directly to presigned URLs (direct upload path).
+  await s3()
+    .send(
+      new PutBucketCorsCommand({
+        Bucket: BUCKET,
+        CORSConfiguration: {
+          CORSRules: [
+            {
+              AllowedMethods: ["PUT", "GET", "HEAD"],
+              AllowedOrigins: [process.env.NEXT_PUBLIC_APP_URL || "*", "*"],
+              AllowedHeaders: ["*"],
+              ExposeHeaders: ["ETag"],
+              MaxAgeSeconds: 3600,
+            },
+          ],
+        },
+      }),
+    )
+    .catch(() => {
+      /* best-effort — some providers (R2) manage CORS out of band */
+    });
+
   bucketReady = true;
 }
 

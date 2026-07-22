@@ -67,8 +67,16 @@ export function PublishDialog({
 
   return (
     <>
-      <Button size="sm" variant="outline" disabled={disabled} onClick={() => setOpen(true)}>
-        <Send className="h-4 w-4" /> Publish
+      <Button
+        size="icon"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        title="Publish"
+        aria-label="Publish"
+        className="h-8 w-8 shrink-0"
+      >
+        <Send className="h-4 w-4" />
       </Button>
 
       {open && (

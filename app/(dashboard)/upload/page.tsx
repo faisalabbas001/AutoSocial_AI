@@ -30,40 +30,91 @@ export default function UploadPage() {
     setPhase("selected");
   }, []);
 
+  function onUploaded() {
+    setProgress(100);
+    setPhase("done");
+    setTimeout(() => router.push("/videos"), 1200);
+  }
+  function onFailed(message: string) {
+    setError(message);
+    setPhase("selected");
+  }
+
+  /** PUT a file to a URL via XHR so we get real progress. */
+  function putWithProgress(url: string, body: Blob, contentType: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", contentType);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 95));
+      };
+      xhr.onload = () => resolve(xhr.status);
+      xhr.onerror = () => reject(new Error("network"));
+      xhr.send(body);
+    });
+  }
+
   async function startUpload() {
     if (!file) return;
     setPhase("uploading");
     setProgress(0);
     setError(null);
 
-    // Read duration from the file for a realistic record.
+    const title = file.name.replace(/\.[^.]+$/, "");
     const duration = await readDuration(file).catch(() => undefined);
 
+    // Preferred path: presigned direct-to-storage upload (no server buffering,
+    // so multi-GB files work). Falls back to the server route if unavailable.
+    try {
+      const presignRes = await fetch("/api/upload/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      });
+
+      if (presignRes.ok) {
+        const { key, url } = await presignRes.json();
+        const status = await putWithProgress(url, file, file.type);
+        if (status < 200 || status >= 300) throw new Error("storage PUT failed");
+
+        const completeRes = await fetch("/api/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, title, duration, fileSize: file.size }),
+        });
+        if (!completeRes.ok) {
+          onFailed(safeError(await completeRes.text()) ?? "Couldn't finalise the upload.");
+          return;
+        }
+        onUploaded();
+        return;
+      }
+      // Non-OK presign (e.g. 503) → fall through to the server route.
+    } catch {
+      // Presign or direct PUT failed (CORS/storage) → fall back to server route.
+    }
+
+    uploadViaServer(file, title, duration);
+  }
+
+  /** Fallback: multipart POST through the Node server (buffers in memory). */
+  function uploadViaServer(f: File, title: string, duration?: number) {
     const form = new FormData();
-    form.append("file", file);
-    form.append("title", file.name.replace(/\.[^.]+$/, ""));
+    form.append("file", f);
+    form.append("title", title);
     if (duration) form.append("duration", String(duration));
 
-    // XHR gives us real upload progress (fetch doesn't expose it).
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setProgress(100);
-        setPhase("done");
-        setTimeout(() => router.push("/videos"), 1200);
-      } else {
-        setError(safeError(xhr.responseText) ?? "Upload failed. Is the server + MinIO running?");
-        setPhase("selected");
-      }
+      if (xhr.status >= 200 && xhr.status < 300) onUploaded();
+      else onFailed(safeError(xhr.responseText) ?? "Upload failed. Is the server + MinIO running?");
     };
-    xhr.onerror = () => {
-      setError("Network error during upload.");
-      setPhase("selected");
-    };
+    xhr.onerror = () => onFailed("Network error during upload.");
     xhr.send(form);
   }
 
@@ -152,9 +203,10 @@ export default function UploadPage() {
             </div>
 
             <p className="text-xs text-muted">
-              After upload, the AI pipeline runs: transcription → subtitles → silence removal → editing →
-              thumbnail → captions → hashtags. Start the worker with{" "}
-              <code className="rounded bg-muted-surface px-1 py-0.5">npm run workers</code>.
+              After upload, the AI pipeline runs: transcription → visual analysis → thumbnails →
+              captions → hashtags → subtitles. You then review &amp; fine-tune (thumbnail, trim,
+              subtitles, captions) before publishing; per-platform framing is applied at publish. Start
+              the worker with <code className="rounded bg-muted-surface px-1 py-0.5">npm run workers</code>.
             </p>
           </CardContent>
         </Card>

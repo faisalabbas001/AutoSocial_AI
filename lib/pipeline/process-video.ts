@@ -3,14 +3,16 @@ import { join } from "node:path";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
-import { transcribe } from "@/lib/ai/whisper";
+import { transcribe, chunkSrt } from "@/lib/ai/whisper";
 import { analyzeVisual } from "@/lib/ai/vision";
 import { generateCaptions } from "@/lib/ai/caption";
 import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
   hasFfmpeg,
+  probeDuration,
+  probeSize,
   extractAudio,
-  extractThumbnail,
+  extractThumbnails,
   extractKeyframes,
   burnSubtitles,
 } from "@/lib/media/ffmpeg";
@@ -48,6 +50,27 @@ export async function processVideo(videoId: string) {
       await downloadTo(video.originalUrl, sourcePath).catch(() => (sourcePath = null));
     }
 
+    // Duration accuracy: the browser-reported value can be missing/wrong for some
+    // codecs. When we have the file + ffprobe, probe the real duration and persist
+    // it (backfilling null and correcting bad values) so keyframe sampling, the
+    // re-encode guard, and the UI all use the true length.
+    let duration = video.duration;
+    if (ffmpegReady && sourcePath) {
+      const [probed, size] = await Promise.all([probeDuration(sourcePath), probeSize(sourcePath)]);
+      const data: { duration?: number; width?: number; height?: number } = {};
+      if (probed && probed !== duration) {
+        duration = probed;
+        data.duration = probed;
+      }
+      if (size) {
+        data.width = size.width;
+        data.height = size.height;
+      }
+      if (Object.keys(data).length > 0) {
+        await prisma.video.update({ where: { id: videoId }, data });
+      }
+    }
+
     // 1. Transcribe (Whisper) — also yields an SRT track for subtitle burning.
     // We transcribe an extracted AUDIO track (small) rather than the whole video,
     // so large uploads don't blow past the transcription API's size limit. The
@@ -55,7 +78,15 @@ export async function processVideo(videoId: string) {
     // analysis and the pipeline continues.
     let srtPath: string | null = null;
     let language = "en";
-    await step(videoId, "TRANSCRIBE", async () => {
+    let visual = "";
+    // Where burned captions should sit for THIS video, decided by the vision model
+    // in the ANALYZE step so text never covers the subject. Safe default: bottom.
+    let captionPlacement: "top" | "bottom" = "bottom";
+
+    // Transcription (audio → Whisper) and visual analysis (keyframes → vision) are
+    // independent, so run them CONCURRENTLY to cut ~5-10s off time-to-captions.
+    await Promise.all([
+      step(videoId, "TRANSCRIBE", async () => {
       let audioPath = sourcePath;
       if (ffmpegReady && sourcePath) {
         const a = join(workDir, "audio.mp3");
@@ -68,7 +99,8 @@ export async function processVideo(videoId: string) {
         await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
         if (t.srt) {
           srtPath = join(workDir, "subs.srt");
-          await writeFile(srtPath, t.srt);
+          // Split long segments into short, readable cues before burning/storing.
+          await writeFile(srtPath, chunkSrt(t.srt));
         }
         return {
           language,
@@ -81,49 +113,74 @@ export async function processVideo(videoId: string) {
         logger.warn({ videoId, err: String(err) }, "transcription failed — continuing with visuals");
         return { skipped: true, reason: "transcription failed", error: String(err).slice(0, 140) };
       }
-    });
+      }),
+
+      // 1b. Analyse what the video VISUALLY shows (sampled keyframes → vision model).
+      // This is what makes captions/hashtags match the real content even with no
+      // speech. Requires ffmpeg (to sample frames) + an AI key; best-effort otherwise.
+      step(videoId, "ANALYZE", async () => {
+      if (!ffmpegReady || !sourcePath) return { skipped: true, reason: "no ffmpeg/source" };
+      try {
+        const framePaths = await extractKeyframes(sourcePath, workDir, 2, duration);
+        if (framePaths.length === 0) return { skipped: true, reason: "no frames" };
+        const frames = await Promise.all(framePaths.map((p) => readFile(p)));
+        const analysis = await analyzeVisual({
+          frames,
+          industry: video.business.industry,
+          businessName: video.business.name,
+        });
+        visual = analysis.description;
+        captionPlacement = analysis.captionPlacement;
+        // Persist placement in the job result so the publish step can reuse the
+        // exact same decision without re-analysing the video.
+        return {
+          frames: framePaths.length,
+          chars: visual.length,
+          description: visual,
+          captionPlacement,
+        };
+      } catch (err) {
+        // Visual analysis only *enriches* captions/hashtags — it must never abort
+        // the pipeline, or the client loses their core deliverable. Degrade to "".
+        visual = "";
+        logger.warn({ videoId, err: String(err) }, "visual analysis failed — continuing without it");
+        return { skipped: true, reason: "analysis failed", error: String(err).slice(0, 140) };
+      }
+      }),
+    ]);
 
     const transcriptText =
       (await prisma.video.findUnique({ where: { id: videoId } }))?.transcript ?? "";
-
-    // 1b. Analyse what the video VISUALLY shows (sampled keyframes → vision model).
-    // This is what makes captions/hashtags match the real content even with no
-    // speech. Requires ffmpeg (to sample frames) + an AI key; best-effort otherwise.
-    let visual = "";
-    await step(videoId, "ANALYZE", async () => {
-      if (!ffmpegReady || !sourcePath) return { skipped: true, reason: "no ffmpeg/source" };
-      const framePaths = await extractKeyframes(sourcePath, workDir, 2, video.duration);
-      if (framePaths.length === 0) return { skipped: true, reason: "no frames" };
-      const frames = await Promise.all(framePaths.map((p) => readFile(p)));
-      visual = await analyzeVisual({
-        frames,
-        industry: video.business.industry,
-        businessName: video.business.name,
-      });
-      return { frames: framePaths.length, chars: visual.length, description: visual };
-    });
 
     // ── Fast path first: thumbnail + captions + hashtags ──────────────────
     // These are the client's core value, so they run BEFORE the (potentially
     // slow) video re-encode. The video becomes reviewable as soon as they're
     // done, even for long uploads.
 
-    // Thumbnail — one frame from the source (fast).
+    // Thumbnails — several real candidate frames sampled across the video so the
+    // reviewer can pick the most accurate one. No random stock fallback: if a
+    // frame can't be extracted we store a neutral branded placeholder instead of
+    // an unrelated stock photo.
     await step(videoId, "THUMBNAIL", async () => {
-      let url = `https://picsum.photos/seed/${videoId}/1080/1920`;
-      let real = false;
+      const urls: string[] = [];
       if (ffmpegReady && sourcePath) {
-        const thumbPath = join(workDir, "thumb.jpg");
-        const r = await extractThumbnail(sourcePath, thumbPath, 1);
-        if (!r.skipped) {
-          const buf = await readFile(thumbPath);
-          url = await putObject(`thumbnails/${videoId}.jpg`, buf, "image/jpeg");
-          real = true;
+        const framePaths = await extractThumbnails(sourcePath, workDir, 4, duration);
+        for (let i = 0; i < framePaths.length; i++) {
+          const buf = await readFile(framePaths[i]);
+          urls.push(await putObject(`thumbnails/${videoId}/${i}.jpg`, buf, "image/jpeg"));
         }
       }
+      if (urls.length === 0) {
+        // No frames available (no ffmpeg/source) — a neutral placeholder, never a
+        // misleading unrelated image.
+        const svg = placeholderSvg(video.business.name);
+        urls.push(await putObject(`thumbnails/${videoId}/placeholder.svg`, Buffer.from(svg), "image/svg+xml"));
+      }
       await prisma.thumbnail.deleteMany({ where: { videoId } });
-      await prisma.thumbnail.create({ data: { videoId, url, isPrimary: true } });
-      return { real };
+      await prisma.thumbnail.createMany({
+        data: urls.map((url, i) => ({ videoId, url, isPrimary: i === 0 })),
+      });
+      return { candidates: urls.length, real: ffmpegReady && Boolean(sourcePath) };
     });
 
     // Captions — one batched, language-aware call for all platforms.
@@ -164,6 +221,21 @@ export async function processVideo(videoId: string) {
       return { platforms: Object.keys(hashtags).length };
     });
 
+    // ── The client's core value (captions + hashtags + thumbnail) is now done.
+    // Mark the video READY *here*, BEFORE the slow subtitle re-encode below, so
+    // the review screen is usable in ~seconds instead of waiting on a full video
+    // re-encode. The subtitle burn continues afterwards and swaps in the
+    // subtitled preview (processedUrl) when it finishes.
+    await prisma.video.update({ where: { id: videoId }, data: { status: "READY" } });
+    await prisma.notification.create({
+      data: {
+        userId: video.business.userId,
+        type: "PROCESSING_COMPLETE",
+        title: "Video ready for review",
+        message: `"${video.title}" is ready — captions & hashtags generated.`,
+      },
+    });
+
     // Subtitles: store the transcribed SRT as-is, then burn the same track into
     // a reviewable preview video. Silent videos store nothing -> no subtitles.
     await step(videoId, "SUBTITLE", async () => {
@@ -179,7 +251,7 @@ export async function processVideo(videoId: string) {
       let processedUrl: string | null = null;
       if (ffmpegReady && sourcePath) {
         const subtitledPath = join(workDir, "subtitled.mp4");
-        const r = await burnSubtitles(sourcePath, srtPath!, subtitledPath);
+        const r = await burnSubtitles(sourcePath, srtPath!, subtitledPath, captionPlacement);
         if (!r.skipped) {
           const buf = await readFile(subtitledPath);
           processedUrl = await putObject(
@@ -197,17 +269,6 @@ export async function processVideo(videoId: string) {
       };
     });
 
-    // The video is now reviewable & publishable (captions/hashtags/thumbnail ready).
-    await prisma.video.update({ where: { id: videoId }, data: { status: "READY" } });
-    await prisma.notification.create({
-      data: {
-        userId: video.business.userId,
-        type: "PROCESSING_COMPLETE",
-        title: "Video ready for review",
-        message: `"${video.title}" is ready — captions & hashtags generated.`,
-      },
-    });
-
     // Note: video is NOT re-encoded here. The correct aspect ratio per platform
     // (9:16 for Reels/TikTok/Shorts, 1:1 for LinkedIn, …) is applied at publish
     // time — see renditionForPlatform() in publish-post.ts.
@@ -217,6 +278,19 @@ export async function processVideo(videoId: string) {
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** A neutral, on-brand vertical placeholder used only when no frame can be extracted. */
+function placeholderSvg(businessName: string): string {
+  const label = (businessName || "Video").slice(0, 40).replace(/[<&>]/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#312e81"/>
+  </linearGradient></defs>
+  <rect width="1080" height="1920" fill="url(#g)"/>
+  <text x="540" y="980" fill="#ffffff" font-family="system-ui,sans-serif" font-size="64"
+    font-weight="600" text-anchor="middle">${label}</text>
+</svg>`;
 }
 
 function extOf(url: string): string {

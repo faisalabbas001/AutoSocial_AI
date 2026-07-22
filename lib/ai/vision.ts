@@ -1,4 +1,5 @@
-import { aiClient, aiModels } from "./client";
+import { aiClient, aiModels, aiProvider } from "./client";
+import { logger } from "@/lib/logger";
 import type OpenAI from "openai";
 
 export interface VisionInput {
@@ -8,18 +9,31 @@ export interface VisionInput {
   businessName?: string | null;
 }
 
+export interface VisualAnalysis {
+  /** 2-4 sentence description of what the video shows (drives captions/hashtags). */
+  description: string;
+  /**
+   * Which half of the frame burned captions should sit in so they DON'T cover the
+   * main subject/face or on-screen text — decided per video by looking at the
+   * actual frames. "bottom" is the safe default (most talking-head clips).
+   */
+  captionPlacement: "top" | "bottom";
+}
+
+const DEFAULT_ANALYSIS: VisualAnalysis = { description: "", captionPlacement: "bottom" };
+
 /**
- * Analyse what a video (via sampled keyframes) or image VISUALLY shows, using a
- * multimodal model. This is what makes captions/hashtags match the actual content
- * even when there is no speech — the core "analyse the video" requirement.
+ * Analyse what a video (via sampled keyframes) VISUALLY shows, using a multimodal
+ * model. This is what makes captions/hashtags match the actual content even when
+ * there is no speech — the core "analyse the video" requirement — AND decides
+ * where captions can safely go without covering the subject.
  *
- * Returns a concise English description of the subject, setting, actions and mood.
- * Empty string when there's no key (mock mode) or no frames.
+ * Returns {@link DEFAULT_ANALYSIS} when there's no key (mock mode) or no frames.
  */
-export async function analyzeVisual(input: VisionInput): Promise<string> {
+export async function analyzeVisual(input: VisionInput): Promise<VisualAnalysis> {
   const ai = aiClient();
   const frames = input.frames.slice(0, 5); // model accepts up to 5 images
-  if (!ai || frames.length === 0) return "";
+  if (!ai || frames.length === 0) return DEFAULT_ANALYSIS;
 
   const imageParts: OpenAI.Chat.ChatCompletionContentPart[] = frames.map((buf) => ({
     type: "image_url",
@@ -29,32 +43,71 @@ export async function analyzeVisual(input: VisionInput): Promise<string> {
 
   const prompt =
     `These are ${frames.length > 1 ? `${frames.length} frames sampled from a short video` : "an image"}. ` +
-    "Describe CONCRETELY and objectively what is visually shown — the video could be about ANYTHING " +
-    "(a person, food, a product, a place, an activity, nature, text on screen, etc.). Cover the main " +
-    "subject, setting, any actions or before/after, notable details, and the overall mood. 2-4 sentences. " +
-    "Only describe what is actually visible. Do NOT assume any particular business or industry, and do " +
-    "NOT invent claims, prices or offers. This will be used to write an accurate caption.";
+    "Return ONLY a JSON object with exactly these keys:\n" +
+    '- "description": 2-4 sentences describing CONCRETELY and objectively what is visually shown ' +
+    "(main subject, setting, actions or before/after, notable details, mood). The video could be " +
+    "about ANYTHING — a person, food, a product, a place, an activity, nature, text on screen. Only " +
+    "describe what is actually visible. Do NOT assume any business or industry and do NOT invent " +
+    "claims, prices or offers. This is used to write an accurate caption.\n" +
+    '- "captionPlacement": either "top" or "bottom" — the half of the frame where LARGE on-screen ' +
+    "captions would NOT cover the main subject (face/product) or any important on-screen text, judged " +
+    'across all frames. If the subject fills the centre or the lower area is clear, choose "bottom".';
 
-  // The vision model is a reasoning model that would otherwise spend its whole
-  // token budget "thinking" and return empty content. `reasoning_effort: "none"`
-  // (a Groq extension) disables the <think> trace, giving a direct, cheap answer.
-  // Cast through unknown because it's not part of the OpenAI type definitions.
-  const params = {
+  const params: Record<string, unknown> = {
     model: aiModels().vision,
-    temperature: 0.4,
+    temperature: 0.3,
     max_tokens: 500,
-    reasoning_effort: "none",
+    response_format: { type: "json_object" },
     messages: [{ role: "user", content: [{ type: "text", text: prompt }, ...imageParts] }],
   };
+
+  // `reasoning_effort: "none"` is a GROQ-ONLY extension that disables the <think>
+  // trace on Groq's reasoning-based vision model. OpenAI's gpt-4o REJECTS this
+  // parameter (400 Unsupported), which silently killed all visual analysis and
+  // made captions fall back to the generic business-industry text. Only send it
+  // to Groq; OpenAI vision models don't need it.
+  if (aiProvider() === "groq") params.reasoning_effort = "none";
 
   try {
     const res = await ai.chat.completions.create(
       params as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
     );
-    return stripReasoning(res.choices[0]?.message?.content ?? "");
+    const raw = stripReasoning(res.choices[0]?.message?.content ?? "");
+    const parsed = parseJson(raw);
+    // Fall back gracefully: if JSON didn't parse, treat any plain text as the
+    // description so captions still get a content signal.
+    const description =
+      typeof parsed?.description === "string" && parsed.description.trim()
+        ? parsed.description.trim()
+        : raw && !raw.trimStart().startsWith("{")
+          ? raw
+          : "";
+    const captionPlacement = parsed?.captionPlacement === "top" ? "top" : "bottom";
+    return { description, captionPlacement };
+  } catch (err) {
+    // Vision is best-effort: fall back to transcript-only — but LOG it, don't
+    // swallow silently (a silent empty here is what broke caption accuracy).
+    logger.warn({ err: String(err) }, "visual analysis call failed");
+    return DEFAULT_ANALYSIS;
+  }
+}
+
+/** Lenient JSON extractor (handles code-fenced or slightly-wrapped model output). */
+function parseJson(raw: string): { description?: unknown; captionPlacement?: unknown } | null {
+  const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  try {
+    return JSON.parse(cleaned);
   } catch {
-    // Vision is best-effort: on any failure we fall back to transcript-only.
-    return "";
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(cleaned.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 }
 

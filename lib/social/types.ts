@@ -3,6 +3,8 @@ export type Platform = "INSTAGRAM" | "FACEBOOK" | "TIKTOK" | "YOUTUBE" | "LINKED
 /** The connected account a post publishes through (tokens included for refresh). */
 export interface PublishAccount {
   id: string;
+  /** Platform-side id: YouTube channel, Facebook Page, IG Business account, TikTok open_id. */
+  accountId: string;
   accessToken: string | null;
   refreshToken: string | null;
   expiresAt: Date | null;

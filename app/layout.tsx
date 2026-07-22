@@ -28,7 +28,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* suppressHydrationWarning: browser extensions (password managers, etc.)
+          inject attributes onto <body> before React hydrates — harmless, but it
+          otherwise surfaces a hydration-mismatch warning. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

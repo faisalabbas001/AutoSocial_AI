@@ -1,5 +1,8 @@
 import type { Platform, PublishInput, PublishResult, PlatformMetrics, SocialPublisher } from "./types";
 import { youtubePublisher, youtubeConfigured } from "./youtube";
+import { facebookPublisher, facebookConfigured } from "./facebook";
+import { instagramPublisher, instagramConfigured } from "./instagram";
+import { tiktokPublisher, tiktokConfigured } from "./tiktok";
 
 export * from "./types";
 
@@ -38,6 +41,16 @@ const stubs: Record<Platform, SocialPublisher> = {
 };
 
 export function getPublisher(platform: Platform): SocialPublisher {
-  if (platform === "YOUTUBE" && youtubeConfigured()) return youtubePublisher;
-  return stubs[platform];
+  switch (platform) {
+    case "YOUTUBE":
+      return youtubeConfigured() ? youtubePublisher : stubs.YOUTUBE;
+    case "FACEBOOK":
+      return facebookConfigured() ? facebookPublisher : stubs.FACEBOOK;
+    case "INSTAGRAM":
+      return instagramConfigured() ? instagramPublisher : stubs.INSTAGRAM;
+    case "TIKTOK":
+      return tiktokConfigured() ? tiktokPublisher : stubs.TIKTOK;
+    default:
+      return stubs[platform];
+  }
 }
