@@ -6,6 +6,7 @@ import { Topbar } from "@/components/dashboard/topbar";
 import { Card } from "@/components/ui/card";
 import { VideoStatusBadge } from "@/components/shared/status-badge";
 import { PublishDialog } from "@/components/video/publish-dialog";
+import { DeleteVideoButton } from "@/components/video/delete-video-button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn, formatBytes, formatDuration } from "@/lib/utils";
 
@@ -136,6 +137,7 @@ export default async function VideosPage({
                           Review & Publish
                         </Link>
                         <PublishDialog videoId={v.id} connectedPlatforms={connectedPlatforms} disabled={!reviewable} />
+                        <DeleteVideoButton videoId={v.id} title={v.title} />
                       </div>
                     </div>
                   </Card>

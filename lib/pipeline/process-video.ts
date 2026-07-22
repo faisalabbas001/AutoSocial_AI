@@ -10,22 +10,11 @@ import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
   hasFfmpeg,
   extractAudio,
-  removeSilence,
-  toVertical,
-  burnSubtitles,
-  overlayLogo,
   extractThumbnail,
   extractKeyframes,
 } from "@/lib/media/ffmpeg";
 import { putObject } from "@/lib/storage";
 import type { JobType, Platform } from "@prisma/client";
-
-/**
- * Silence removal only trims the audio stream, which drifts audio out of sync
- * with the (untrimmed) video. It's therefore OFF by default so processed videos
- * always play back correctly. Opt in with ENABLE_SILENCE_REMOVAL=true.
- */
-const SILENCE_REMOVAL_ENABLED = process.env.ENABLE_SILENCE_REMOVAL === "true";
 
 /**
  * Runs the full AI processing pipeline for a video, recording each step as a
@@ -49,7 +38,6 @@ export async function processVideo(videoId: string) {
 
   const workDir = await mkdtemp(join(tmpdir(), `autosocial-${videoId.slice(0, 8)}-`));
   const ffmpegReady = await hasFfmpeg();
-  let processedUrl = video.originalUrl;
 
   try {
     // Download the source file once; reused for transcription + all media ops.
@@ -114,76 +102,18 @@ export async function processVideo(videoId: string) {
       return { frames: framePaths.length, chars: visual.length, description: visual };
     });
 
-    // Track the "current" working file as it passes through each ffmpeg stage.
-    let currentPath = sourcePath;
-    let ranFfmpeg = false;
+    // ── Fast path first: thumbnail + captions + hashtags ──────────────────
+    // These are the client's core value, so they run BEFORE the (potentially
+    // slow) video re-encode. The video becomes reviewable as soon as they're
+    // done, even for long uploads.
 
-    // 2. Subtitle track (SRT already written above)
-    await step(videoId, "SUBTITLE", async () => ({ generated: Boolean(srtPath) }));
-
-    // 3. Silence removal (off by default — keeps audio/video in sync)
-    await step(videoId, "SILENCE_REMOVAL", async () => {
-      if (!SILENCE_REMOVAL_ENABLED) return { skipped: true, reason: "disabled (A/V sync)" };
-      if (!ffmpegReady || !currentPath) return { skipped: true };
-      const out = join(workDir, "nosilence.mp4");
-      const r = await removeSilence(currentPath, out);
-      if (!r.skipped) {
-        currentPath = out;
-        ranFfmpeg = true;
-      }
-      return { skipped: r.skipped };
-    });
-
-    // 4. Edit: vertical crop → subtitle burn → logo overlay
-    await step(videoId, "EDIT", async () => {
-      if (!ffmpegReady || !currentPath) return { skipped: true };
-      let p = currentPath;
-
-      const vOut = join(workDir, "vertical.mp4");
-      const v = await toVertical(p, vOut);
-      if (!v.skipped) p = vOut;
-
-      let subtitled = false;
-      if (srtPath) {
-        const sOut = join(workDir, "subbed.mp4");
-        const s = await burnSubtitles(p, srtPath, sOut);
-        if (!s.skipped) {
-          p = sOut;
-          subtitled = true;
-        }
-      }
-
-      let logoed = false;
-      if (video.business.logoUrl?.startsWith("http")) {
-        const logoPath = join(workDir, "logo.png");
-        if (await downloadTo(video.business.logoUrl, logoPath).then(() => true).catch(() => false)) {
-          const lOut = join(workDir, "logo-out.mp4");
-          const l = await overlayLogo(p, logoPath, lOut);
-          if (!l.skipped) {
-            p = lOut;
-            logoed = true;
-          }
-        }
-      }
-
-      currentPath = p;
-      ranFfmpeg = true;
-      return { vertical: !v.skipped, subtitles: subtitled, logo: logoed };
-    });
-
-    // Upload the processed video (only if ffmpeg actually produced a new file).
-    if (ranFfmpeg && currentPath && currentPath !== sourcePath) {
-      const buf = await readFile(currentPath);
-      processedUrl = await putObject(`processed/${video.businessId}/${videoId}.mp4`, buf, "video/mp4");
-    }
-
-    // 5. Thumbnail — extract a real frame when possible, else a placeholder.
+    // Thumbnail — one frame from the source (fast).
     await step(videoId, "THUMBNAIL", async () => {
       let url = `https://picsum.photos/seed/${videoId}/1080/1920`;
       let real = false;
-      if (ffmpegReady && currentPath) {
+      if (ffmpegReady && sourcePath) {
         const thumbPath = join(workDir, "thumb.jpg");
-        const r = await extractThumbnail(currentPath, thumbPath, 1);
+        const r = await extractThumbnail(sourcePath, thumbPath, 1);
         if (!r.skipped) {
           const buf = await readFile(thumbPath);
           url = await putObject(`thumbnails/${videoId}.jpg`, buf, "image/jpeg");
@@ -195,7 +125,7 @@ export async function processVideo(videoId: string) {
       return { real };
     });
 
-    // 6. Captions — one batched, language-aware model call for all platforms.
+    // Captions — one batched, language-aware call for all platforms.
     await step(videoId, "CAPTION", async () => {
       const captions = await generateCaptions({
         transcript: transcriptText,
@@ -204,7 +134,6 @@ export async function processVideo(videoId: string) {
         businessName: video.business.name,
         language,
       });
-      // Idempotent: clear any prior run's captions before writing fresh ones.
       await prisma.caption.deleteMany({ where: { videoId } });
       await prisma.caption.createMany({
         data: Object.entries(captions).map(([platform, text]) => ({
@@ -216,7 +145,7 @@ export async function processVideo(videoId: string) {
       return { platforms: Object.keys(captions).length, language };
     });
 
-    // 7. Hashtags — one batched model call for all platforms.
+    // Hashtags — one batched call for all platforms.
     await step(videoId, "HASHTAG", async () => {
       const hashtags = await generateAllHashtags({
         transcript: transcriptText,
@@ -234,21 +163,24 @@ export async function processVideo(videoId: string) {
       return { platforms: Object.keys(hashtags).length };
     });
 
-    await prisma.video.update({
-      where: { id: videoId },
-      data: { status: "READY", processedUrl },
-    });
+    await step(videoId, "SUBTITLE", async () => ({ generated: Boolean(srtPath) }));
 
+    // The video is now reviewable & publishable (captions/hashtags/thumbnail ready).
+    await prisma.video.update({ where: { id: videoId }, data: { status: "READY" } });
     await prisma.notification.create({
       data: {
         userId: video.business.userId,
         type: "PROCESSING_COMPLETE",
         title: "Video ready for review",
-        message: `"${video.title}" has finished processing and is ready to publish.`,
+        message: `"${video.title}" is ready — captions & hashtags generated.`,
       },
     });
 
-    logger.info({ videoId, ranFfmpeg }, "pipeline: complete");
+    // Note: video is NOT re-encoded here. The correct aspect ratio per platform
+    // (9:16 for Reels/TikTok/Shorts, 1:1 for LinkedIn, …) is applied at publish
+    // time — see renditionForPlatform() in publish-post.ts.
+
+    logger.info({ videoId }, "pipeline: complete");
     return { videoId, status: "READY" as const };
   } finally {
     await rm(workDir, { recursive: true, force: true }).catch(() => {});

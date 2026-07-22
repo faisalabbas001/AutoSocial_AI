@@ -1,6 +1,58 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { getPublisher } from "@/lib/social";
+import { hasFfmpeg, convertAspect } from "@/lib/media/ffmpeg";
+import { PLATFORM_ASPECT } from "@/lib/media/aspect";
+import { putObject } from "@/lib/storage";
+import type { Platform } from "@prisma/client";
+
+/**
+ * Produce a version of the video in the target platform's aspect ratio
+ * (e.g. 9:16 for Reels/TikTok/Shorts, 1:1 for LinkedIn) and return its URL.
+ * Falls back to the original when ffmpeg is unavailable, the clip is very long,
+ * or conversion fails — so publishing never blocks on it.
+ */
+async function renditionForPlatform(
+  videoUrl: string,
+  businessId: string,
+  videoId: string,
+  platform: Platform,
+  durationSeconds: number | null,
+): Promise<string> {
+  const dims = PLATFORM_ASPECT[platform];
+  if (!videoUrl.startsWith("http") || !dims) return videoUrl;
+  if (durationSeconds != null && durationSeconds > 600) return videoUrl; // too long to re-encode
+  if (!(await hasFfmpeg())) return videoUrl;
+
+  const workDir = await mkdtemp(join(tmpdir(), `pub-${videoId.slice(0, 8)}-`));
+  try {
+    const res = await fetch(videoUrl);
+    if (!res.ok) return videoUrl;
+    const src = join(workDir, "src.mp4");
+    await writeFile(src, Buffer.from(await res.arrayBuffer()));
+
+    const out = join(workDir, "out.mp4");
+    const r = await convertAspect(src, out, dims.w, dims.h);
+    if (r.skipped) return videoUrl;
+
+    const buf = await readFile(out);
+    const url = await putObject(
+      `renditions/${businessId}/${videoId}/${platform.toLowerCase()}.mp4`,
+      buf,
+      "video/mp4",
+    );
+    logger.info({ videoId, platform, ratio: dims.label }, "publish: aspect rendition ready");
+    return url;
+  } catch (err) {
+    logger.warn({ videoId, platform, err: String(err) }, "aspect conversion failed — using original");
+    return videoUrl;
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 /**
  * Publishes a single scheduled post to its target platform, then records initial
@@ -26,8 +78,18 @@ export async function publishPost(scheduledPostId: string) {
       refreshToken: post.socialAccount.refreshToken,
       expiresAt: post.socialAccount.expiresAt,
     };
+    // Frame the video to the platform's required aspect ratio before uploading.
+    const baseUrl = post.video.processedUrl ?? post.video.originalUrl ?? "";
+    const videoUrl = await renditionForPlatform(
+      baseUrl,
+      post.video.businessId,
+      post.video.id,
+      post.platform,
+      post.video.duration,
+    );
+
     const result = await publisher.publish({
-      videoUrl: post.video.processedUrl ?? post.video.originalUrl ?? "",
+      videoUrl,
       thumbnailUrl: post.thumbnailUrl,
       caption: post.caption ?? "",
       hashtags: post.hashtags,

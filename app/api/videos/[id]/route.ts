@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { keyFromUrl, deleteObject } from "@/lib/storage";
 import type { Platform } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Collect the storage objects before the row (and its thumbnails) are gone.
+  const video = await prisma.video.findUnique({
+    where: { id },
+    select: { originalUrl: true, processedUrl: true, thumbnails: { select: { url: true } } },
+  });
+  if (!video) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
   await prisma.video.delete({ where: { id } });
+
+  // Best-effort object cleanup (don't fail the delete if storage is unavailable).
+  const keys = [
+    keyFromUrl(video.originalUrl),
+    keyFromUrl(video.processedUrl),
+    ...video.thumbnails.map((t) => keyFromUrl(t.url)),
+  ].filter((k): k is string => Boolean(k));
+  await Promise.all(keys.map((k) => deleteObject(k).catch(() => {})));
+
   return NextResponse.json({ ok: true });
 }

@@ -76,6 +76,22 @@ export async function toVertical(input: string, output: string) {
   return { skipped: false, output };
 }
 
+/**
+ * Convert a video to a target WxH aspect ratio by scaling to cover and
+ * center-cropping (no letterbox bars). Used to produce the correct ratio per
+ * platform (e.g. 9:16 for Reels/TikTok/Shorts, 1:1 for LinkedIn). Web-safe.
+ */
+export async function convertAspect(input: string, output: string, w: number, h: number) {
+  if (!(await hasFfmpeg())) return { skipped: true, output: input };
+  await run(FFMPEG, [
+    "-y", "-i", input,
+    "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1`,
+    ...WEB_VIDEO, ...WEB_AUDIO,
+    output,
+  ]);
+  return { skipped: false, output };
+}
+
 /** Burn an SRT subtitle track into the video. Re-encodes web-safe. */
 export async function burnSubtitles(input: string, srtPath: string, output: string) {
   if (!(await hasFfmpeg()) || !(await fileExists(srtPath))) return { skipped: true, output: input };

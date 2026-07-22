@@ -102,3 +102,10 @@ export function videoKey(businessId: string, filename: string) {
   const safe = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   return `videos/${businessId}/${Date.now()}-${safe}`;
 }
+
+/** Recover the object key from a public URL (null if it isn't one of ours). */
+export function keyFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const base = (process.env.S3_PUBLIC_URL || `${process.env.S3_ENDPOINT}/${BUCKET}`).replace(/\/$/, "");
+  return url.startsWith(`${base}/`) ? url.slice(base.length + 1) : null;
+}
