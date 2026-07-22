@@ -103,6 +103,24 @@ export async function overlayLogo(input: string, logoPath: string, output: strin
   return { skipped: false, output };
 }
 
+/**
+ * Extract a compact mono audio track for transcription. Whisper only needs
+ * audio, and a 16 kHz mono MP3 is a few MB regardless of the source video size —
+ * which keeps us under transcription-API upload limits (Groq free tier ≈ 25 MB).
+ */
+export async function extractAudio(input: string, output: string) {
+  if (!(await hasFfmpeg())) return { skipped: true, output: null };
+  await run(FFMPEG, [
+    "-y", "-i", input,
+    "-vn",            // drop video
+    "-ac", "1",       // mono
+    "-ar", "16000",   // 16 kHz (Whisper's native rate)
+    "-b:a", "64k",
+    output,
+  ]);
+  return { skipped: false, output };
+}
+
 /** Extract a thumbnail frame at the given timestamp (seconds). */
 export async function extractThumbnail(input: string, output: string, atSeconds = 1) {
   if (!(await hasFfmpeg())) return { skipped: true, output: null };

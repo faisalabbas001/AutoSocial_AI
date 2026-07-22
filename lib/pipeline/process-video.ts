@@ -9,6 +9,7 @@ import { generateCaptions } from "@/lib/ai/caption";
 import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
   hasFfmpeg,
+  extractAudio,
   removeSilence,
   toVertical,
   burnSubtitles,
@@ -59,17 +60,38 @@ export async function processVideo(videoId: string) {
     }
 
     // 1. Transcribe (Whisper) — also yields an SRT track for subtitle burning.
+    // We transcribe an extracted AUDIO track (small) rather than the whole video,
+    // so large uploads don't blow past the transcription API's size limit. The
+    // step is non-fatal: if transcription fails, captions fall back to the visual
+    // analysis and the pipeline continues.
     let srtPath: string | null = null;
     let language = "en";
     await step(videoId, "TRANSCRIBE", async () => {
-      const t = await transcribe(sourcePath ?? "");
-      language = t.language || "en";
-      await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
-      if (t.srt) {
-        srtPath = join(workDir, "subs.srt");
-        await writeFile(srtPath, t.srt);
+      let audioPath = sourcePath;
+      if (ffmpegReady && sourcePath) {
+        const a = join(workDir, "audio.mp3");
+        const r = await extractAudio(sourcePath, a).catch(() => ({ skipped: true, output: null }));
+        if (!r.skipped) audioPath = a;
       }
-      return { language, chars: t.text.length, source: sourcePath ? "file" : "mock" };
+      try {
+        const t = await transcribe(audioPath ?? "");
+        language = t.language || "en";
+        await prisma.video.update({ where: { id: videoId }, data: { transcript: t.text } });
+        if (t.srt) {
+          srtPath = join(workDir, "subs.srt");
+          await writeFile(srtPath, t.srt);
+        }
+        return {
+          language,
+          chars: t.text.length,
+          source: audioPath && audioPath !== sourcePath ? "audio" : sourcePath ? "file" : "mock",
+        };
+      } catch (err) {
+        // Transcription is optional — visual analysis still drives the captions.
+        await prisma.video.update({ where: { id: videoId }, data: { transcript: "" } });
+        logger.warn({ videoId, err: String(err) }, "transcription failed — continuing with visuals");
+        return { skipped: true, reason: "transcription failed", error: String(err).slice(0, 140) };
+      }
     });
 
     const transcriptText =
