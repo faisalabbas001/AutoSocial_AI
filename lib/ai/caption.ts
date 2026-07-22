@@ -241,12 +241,12 @@ function parseJson(raw: string): Record<string, unknown> | null {
 }
 
 function mockCaptions(input: CaptionsInput): Record<CaptionPlatform, string> {
-  const name = input.businessName ?? "our team";
+  const name = input.businessName ?? "us";
   return {
-    INSTAGRAM: `✨ You have to see this transformation! ✨\n\nSwipe through and watch the magic happen at ${name}.\n\n📍 Book your appointment today — link in bio 👆`,
-    TIKTOK: `Wait for the results 👀 This is why people love ${name}. Book now!`,
-    YOUTUBE: `${name}: Amazing Transformation (You Won't Believe the Results)\n\nIn this short we show a real result from our team. Subscribe for more.`,
-    FACEBOOK: `We love sharing moments like these with our community! 💙 Come visit ${name} and let us take care of you.`,
-    LINKEDIN: `Consistency and craft matter. Here's a recent result from the team at ${name} — proof that attention to detail delivers real outcomes for our clients.`,
+    INSTAGRAM: `Here's a little moment worth sharing ✨\n\nSomething we captured and wanted to show you.\n\n👉 Follow ${name} for more!`,
+    TIKTOK: `You'll want to see this 👀 More coming soon — follow ${name}!`,
+    YOUTUBE: `A quick clip from ${name}\n\nThanks for watching — subscribe for more.`,
+    FACEBOOK: `Sharing a moment with our community today 💙 Give ${name} a follow for more.`,
+    LINKEDIN: `A quick share from ${name}. We enjoy putting care into what we do — thanks for following along.`,
   };
 }

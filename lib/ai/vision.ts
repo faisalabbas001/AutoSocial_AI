@@ -28,12 +28,12 @@ export async function analyzeVisual(input: VisionInput): Promise<string> {
   }));
 
   const prompt =
-    `These are ${frames.length > 1 ? `${frames.length} frames sampled from a short social media video` : "an image"} ` +
-    `for ${input.businessName ?? "a local business"}${input.industry ? ` (${input.industry})` : ""}. ` +
-    "Describe CONCRETELY what is visually shown: the main subject, setting, any actions or " +
-    "before/after, notable visual details, and the overall mood. 2-4 sentences. " +
-    "Only describe what is actually visible — do not invent claims, prices or offers. " +
-    "This description will be used to write an accurate social media caption.";
+    `These are ${frames.length > 1 ? `${frames.length} frames sampled from a short video` : "an image"}. ` +
+    "Describe CONCRETELY and objectively what is visually shown — the video could be about ANYTHING " +
+    "(a person, food, a product, a place, an activity, nature, text on screen, etc.). Cover the main " +
+    "subject, setting, any actions or before/after, notable details, and the overall mood. 2-4 sentences. " +
+    "Only describe what is actually visible. Do NOT assume any particular business or industry, and do " +
+    "NOT invent claims, prices or offers. This will be used to write an accurate caption.";
 
   // The vision model is a reasoning model that would otherwise spend its whole
   // token budget "thinking" and return empty content. `reasoning_effort: "none"`

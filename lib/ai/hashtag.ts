@@ -103,11 +103,10 @@ function parseJson(raw: string): Record<string, unknown> | null {
 
 function mockAllHashtags(): Record<CaptionPlatform, string[]> {
   const base = [
-    "#SmallBusiness", "#LocalBusiness", "#Transformation", "#BeforeAndAfter",
-    "#Trending", "#Reels", "#ForYou", "#GlowUp", "#Community", "#SupportLocal",
-    "#Viral", "#Explore", "#Motivation", "#Results", "#BookNow", "#Quality",
-    "#Service", "#Team", "#Happy", "#Review", "#Local", "#Business", "#Care",
-    "#Trust", "#New",
+    "#Reels", "#Trending", "#ForYou", "#Explore", "#Viral", "#Video",
+    "#ContentCreator", "#InstaDaily", "#Shorts", "#FYP", "#NewPost", "#Follow",
+    "#Community", "#Story", "#Moment", "#Vibes", "#Discover", "#Share",
+    "#Content", "#Watch", "#Now", "#Daily", "#Feed", "#Trend", "#More",
   ];
   const out = {} as Record<CaptionPlatform, string[]>;
   for (const p of CAPTION_PLATFORMS) out[p] = base.slice(0, COUNT[p]);
