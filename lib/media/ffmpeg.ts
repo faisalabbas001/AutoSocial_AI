@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
+import { basename, dirname } from "node:path";
 
 /** The ffmpeg binary — overridable via FFMPEG_PATH for non-PATH installs. */
 const FFMPEG = process.env.FFMPEG_PATH || "ffmpeg";
@@ -32,9 +33,9 @@ export async function hasFfmpeg(): Promise<boolean> {
   return ffmpegAvailable;
 }
 
-function run(cmd: string, args: string[]): Promise<void> {
+function run(cmd: string, args: string[], opts?: { cwd?: string }): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { stdio: "ignore" });
+    const p = spawn(cmd, args, { stdio: "ignore", cwd: opts?.cwd });
     p.on("error", reject);
     p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} exited ${code}`))));
   });
@@ -80,16 +81,33 @@ export async function toVertical(input: string, output: string) {
  * Convert a video to a target WxH aspect ratio by scaling to cover and
  * center-cropping (no letterbox bars). Used to produce the correct ratio per
  * platform (e.g. 9:16 for Reels/TikTok/Shorts, 1:1 for LinkedIn). Web-safe.
+ *
+ * When `srtPath` is given (and exists), the subtitles are burned in AFTER the
+ * crop/scale so they're sized to the final frame — one re-encode does both.
  */
-export async function convertAspect(input: string, output: string, w: number, h: number) {
-  if (!(await hasFfmpeg())) return { skipped: true, output: input };
-  await run(FFMPEG, [
-    "-y", "-i", input,
-    "-vf", `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1`,
-    ...WEB_VIDEO, ...WEB_AUDIO,
-    output,
-  ]);
-  return { skipped: false, output };
+export async function convertAspect(
+  input: string,
+  output: string,
+  w: number,
+  h: number,
+  srtPath?: string,
+) {
+  if (!(await hasFfmpeg())) return { skipped: true, output: input, subtitled: false };
+
+  let vf = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1`;
+  let subtitled = false;
+  let cwd: string | undefined;
+  if (srtPath && (await fileExists(srtPath))) {
+    // Reference the subtitle by filename with ffmpeg's cwd set to its folder, so
+    // the drive-letter colon in a Windows path never reaches the filter parser.
+    cwd = dirname(srtPath);
+    vf +=
+      `,subtitles=${basename(srtPath)}:force_style='Fontsize=16,Bold=1,Outline=2,Shadow=1,MarginV=48,Alignment=2'`;
+    subtitled = true;
+  }
+
+  await run(FFMPEG, ["-y", "-i", input, "-vf", vf, ...WEB_VIDEO, ...WEB_AUDIO, output], { cwd });
+  return { skipped: false, output, subtitled };
 }
 
 /** Burn an SRT subtitle track into the video. Re-encodes web-safe. */

@@ -191,6 +191,37 @@ export async function romanize(ai: OpenAI, text: string): Promise<string> {
   }
 }
 
+/**
+ * Transliterate the TEXT lines of an SRT subtitle file into Roman Urdu, leaving
+ * the sequence numbers and timestamp lines untouched. No-op when the subtitles
+ * are already Latin (English speech), so English videos keep English subtitles.
+ */
+export async function romanizeSrt(ai: OpenAI, srt: string): Promise<string> {
+  if (!srt || !hasForbiddenScript(srt)) return srt;
+  try {
+    const res = await ai.chat.completions.create({
+      model: aiModels().chat,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are given an SRT subtitle file. Transliterate ONLY the subtitle TEXT lines into " +
+            "ROMAN URDU (Urdu/Hindi written with Latin letters). Keep every sequence number and every " +
+            "timestamp line (e.g. '00:00:01,000 --> 00:00:03,000') and all blank lines EXACTLY as they " +
+            "are. Do NOT translate to English, do NOT add commentary. Output ONLY the resulting SRT, " +
+            "with subtitle text in Latin letters, digits and punctuation only.",
+        },
+        { role: "user", content: srt },
+      ],
+    });
+    const out = res.choices[0]?.message?.content?.trim();
+    return out && !hasForbiddenScript(out) ? out : srt;
+  } catch {
+    return srt;
+  }
+}
+
 function parseJson(raw: string): Record<string, unknown> | null {
   const cleaned = raw.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try {

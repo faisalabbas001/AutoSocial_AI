@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { transcribe } from "@/lib/ai/whisper";
 import { analyzeVisual } from "@/lib/ai/vision";
-import { generateCaptions } from "@/lib/ai/caption";
+import { aiClient } from "@/lib/ai/client";
+import { generateCaptions, romanizeSrt } from "@/lib/ai/caption";
 import { generateAllHashtags } from "@/lib/ai/hashtag";
 import {
   hasFfmpeg,
@@ -13,7 +14,7 @@ import {
   extractThumbnail,
   extractKeyframes,
 } from "@/lib/media/ffmpeg";
-import { putObject } from "@/lib/storage";
+import { putObject, deleteObject } from "@/lib/storage";
 import type { JobType, Platform } from "@prisma/client";
 
 /**
@@ -163,7 +164,22 @@ export async function processVideo(videoId: string) {
       return { platforms: Object.keys(hashtags).length };
     });
 
-    await step(videoId, "SUBTITLE", async () => ({ generated: Boolean(srtPath) }));
+    // Subtitles — only when there's actual speech. Stored (transliterated to
+    // Roman Urdu for Urdu/Hindi speech) so the publish step can burn them onto
+    // each platform's rendition. Silent videos store nothing → no subtitles.
+    await step(videoId, "SUBTITLE", async () => {
+      const hasSpeech = transcriptText.trim().length > 3 && Boolean(srtPath);
+      const subKey = `subtitles/${videoId}.srt`;
+      if (!hasSpeech) {
+        await deleteObject(subKey).catch(() => {});
+        return { stored: false, reason: "no speech" };
+      }
+      const raw = await readFile(srtPath!, "utf8");
+      const ai = aiClient();
+      const srt = ai ? await romanizeSrt(ai, raw) : raw;
+      await putObject(subKey, Buffer.from(srt, "utf8"), "application/x-subrip");
+      return { stored: true, romanized: srt !== raw };
+    });
 
     // The video is now reviewable & publishable (captions/hashtags/thumbnail ready).
     await prisma.video.update({ where: { id: videoId }, data: { status: "READY" } });

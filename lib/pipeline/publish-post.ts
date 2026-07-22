@@ -6,7 +6,7 @@ import { logger } from "@/lib/logger";
 import { getPublisher } from "@/lib/social";
 import { hasFfmpeg, convertAspect } from "@/lib/media/ffmpeg";
 import { PLATFORM_ASPECT } from "@/lib/media/aspect";
-import { putObject } from "@/lib/storage";
+import { putObject, publicUrl } from "@/lib/storage";
 import type { Platform } from "@prisma/client";
 
 /**
@@ -34,8 +34,23 @@ async function renditionForPlatform(
     const src = join(workDir, "src.mp4");
     await writeFile(src, Buffer.from(await res.arrayBuffer()));
 
+    // Fetch the stored subtitle track (present only when the video had speech).
+    let srtPath: string | undefined;
+    try {
+      const subRes = await fetch(publicUrl(`subtitles/${videoId}.srt`));
+      if (subRes.ok) {
+        const text = await subRes.text();
+        if (text.trim()) {
+          srtPath = join(workDir, "subs.srt");
+          await writeFile(srtPath, text);
+        }
+      }
+    } catch {
+      /* no subtitles — publish without them */
+    }
+
     const out = join(workDir, "out.mp4");
-    const r = await convertAspect(src, out, dims.w, dims.h);
+    const r = await convertAspect(src, out, dims.w, dims.h, srtPath);
     if (r.skipped) return videoUrl;
 
     const buf = await readFile(out);
@@ -44,7 +59,7 @@ async function renditionForPlatform(
       buf,
       "video/mp4",
     );
-    logger.info({ videoId, platform, ratio: dims.label }, "publish: aspect rendition ready");
+    logger.info({ videoId, platform, ratio: dims.label, subtitled: r.subtitled }, "publish: rendition ready");
     return url;
   } catch (err) {
     logger.warn({ videoId, platform, err: String(err) }, "aspect conversion failed — using original");
